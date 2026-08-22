@@ -1,0 +1,7 @@
+(include_subdirs unqualified)
+
+(library
+ (name ascon)
+ (public_name ascon)
+ (modules ascon endian state permutation constant_time sponge)
+ (private_modules endian state permutation constant_time sponge))

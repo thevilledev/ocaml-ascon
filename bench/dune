@@ -1,0 +1,4 @@
+(executable
+ (name bench_ascon)
+ (libraries ascon unix)
+ (flags (:standard -I lib/.ascon.objs/byte)))

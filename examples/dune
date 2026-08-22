@@ -1,0 +1,24 @@
+(library
+ (name example_support)
+ (wrapped false)
+ (modules common))
+
+(executable
+ (name hash256)
+ (modules hash256)
+ (libraries ascon example_support))
+
+(executable
+ (name xof128)
+ (modules xof128)
+ (libraries ascon example_support))
+
+(executable
+ (name cxof128)
+ (modules cxof128)
+ (libraries ascon example_support))
+
+(executable
+ (name aead128)
+ (modules aead128)
+ (libraries ascon example_support))

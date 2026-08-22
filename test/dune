@@ -1,0 +1,16 @@
+(test
+ (name test_ascon)
+ (libraries ascon)
+ (flags (:standard -I lib/.ascon.objs/byte))
+ (deps
+  vectors/LWC_AEAD_KAT_128_128.txt
+  vectors/LWC_HASH_KAT_128_256.txt
+  vectors/LWC_XOF_KAT_128_512.txt
+  vectors/LWC_CXOF_KAT_128_512.txt)
+ (action
+  (run
+   %{test}
+   %{dep:vectors/LWC_AEAD_KAT_128_128.txt}
+   %{dep:vectors/LWC_HASH_KAT_128_256.txt}
+   %{dep:vectors/LWC_XOF_KAT_128_512.txt}
+   %{dep:vectors/LWC_CXOF_KAT_128_512.txt})))
