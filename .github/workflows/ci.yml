@@ -2,6 +2,7 @@ name: CI
 
 on:
   push:
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -13,6 +14,22 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  zizmor:
+    name: GitHub Actions security
+    runs-on: avrea-ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Run zizmor
+        uses: zizmorcore/zizmor-action@3dc1ecc9bcb9e94e9b2c709687979e1298497054 # v0.6.2
+        with:
+          version: 1.29.0
+          advanced-security: false
+          annotations: true
+
   linux:
     name: Avrea Linux / OCaml ${{ matrix.ocaml-compiler }}
     runs-on: avrea-ubuntu-latest
@@ -21,8 +38,10 @@ jobs:
       matrix:
         ocaml-compiler: ["4.14.x", "5.2.x", "5.4.x", "5.5.x"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: ocaml/setup-ocaml@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ocaml/setup-ocaml@f92e0606b7ae4873dd1238465ea4bf6f8e40d85c # v3.7.2
         with:
           ocaml-compiler: ${{ matrix.ocaml-compiler }}
           dune-cache: true
@@ -35,8 +54,10 @@ jobs:
     name: GitHub macOS / OCaml 5.5
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: ocaml/setup-ocaml@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ocaml/setup-ocaml@f92e0606b7ae4873dd1238465ea4bf6f8e40d85c # v3.7.2
         with:
           ocaml-compiler: "5.5.x"
           dune-cache: true
