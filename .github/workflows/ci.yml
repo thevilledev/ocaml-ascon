@@ -3,14 +3,19 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux:
-    name: Linux / OCaml ${{ matrix.ocaml-compiler }}
-    runs-on: ubuntu-latest
+    name: Avrea Linux / OCaml ${{ matrix.ocaml-compiler }}
+    runs-on: avrea-ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -27,7 +32,7 @@ jobs:
       - run: opam exec -- dune build @doc
 
   macos:
-    name: macOS / OCaml 5.5
+    name: GitHub macOS / OCaml 5.5
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
