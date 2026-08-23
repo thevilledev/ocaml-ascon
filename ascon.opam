@@ -6,14 +6,22 @@ Ascon-AEAD128, Ascon-Hash256, Ascon-XOF128, and Ascon-CXOF128 algorithms.
 The package provides misuse-resistant one-shot AEAD and typed incremental XOF
 interfaces. It has no mandatory C or Unix dependency.
 """
-maintainer: ["Ville Vesilehto"]
+maintainer: ["Ville Vesilehto <ville@vesilehto.fi>"]
 authors: ["Ville Vesilehto"]
 license: "ISC"
 homepage: "https://github.com/thevilledev/ocaml-ascon"
-doc: "https://thevilledev.github.io/ocaml-ascon/"
 bug-reports: "https://github.com/thevilledev/ocaml-ascon/issues"
 dev-repo: "git+https://github.com/thevilledev/ocaml-ascon.git"
-tags: ["cryptography" "ascon" "aead" "hash" "xof" "nist"]
+tags: [
+  "cryptography"
+  "ascon"
+  "aead"
+  "hash"
+  "xof"
+  "nist"
+  "sp-800-232"
+  "mirageos"
+]
 depends: [
   "ocaml" {>= "4.14"}
   "dune" {>= "3.10"}

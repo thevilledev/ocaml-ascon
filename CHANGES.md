@@ -1,6 +1,6 @@
 # Changes
 
-## 0.1.0 (unreleased)
+## 0.1.0 (2026-08-23)
 
 - Implement Ascon-AEAD128 with detached and combined one-shot APIs.
 - Implement one-shot and persistent incremental Ascon-Hash256.

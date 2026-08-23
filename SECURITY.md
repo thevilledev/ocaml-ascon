@@ -9,8 +9,8 @@ After release, the latest minor release line will receive security fixes.
 
 Please do not open a public issue for a suspected vulnerability. Use the
 repository's **Security → Report a vulnerability** private advisory form. If
-that channel is unavailable, contact the maintainer privately through the
-address that will be published in the opam package metadata before v0.1.0.
+that channel is unavailable, email the maintainer at
+<ville@vesilehto.fi>.
 
 Include the affected version or commit, a minimal reproducer when possible,
 the expected impact, and whether disclosure is time-sensitive. Receipt should
