@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="What the ascon OCaml library claims, what it does not claim, and how to report a vulnerability.">
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="ascon security notes">
+    <meta property="og:description" content="Threat model, caveats, the implementation review checklist, and reporting.">
+    <meta property="og:url" content="https://ville.dev/ocaml-ascon/security.html">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="ascon security notes">
+    <meta name="twitter:description" content="Threat model, caveats, the implementation review checklist, and reporting.">
+    <link rel="canonical" href="https://ville.dev/ocaml-ascon/security.html">
+    <link rel="stylesheet" href="styles.css?v=20260829">
+    <title>ascon security notes</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <nav class="top" aria-label="Primary navigation">
+      [ <a href="index.html">overview</a> |
+      <a href="usage.html">usage</a> |
+      <a href="api.html">api</a> |
+      <a href="benchmarks.html">benchmarks</a> |
+      security |
+      <a href="development.html">dev</a> |
+      <a href="https://github.com/thevilledev/ocaml-ascon">source</a> ]
+    </nav>
+
+    <main id="content">
+      <h1>Security</h1>
+
+      <div class="notice">
+        <p>
+          <strong>No independent audit.</strong> This library has not been
+          reviewed by anyone outside the project, and it is not a
+          FIPS-validated or NIST-validated cryptographic module. It passes
+          4,228 official known-answer vectors, which is evidence that it
+          computes the right function &mdash; and nothing more than that.
+          Conformance is not review.
+        </p>
+      </div>
+
+      <h2 id="claims">What is and is not claimed</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>The honest summary</caption>
+          <thead>
+            <tr><th scope="col">Property</th><th scope="col">Status</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Conformance to final SP 800-232</td><td>Tested against the complete official vector corpus.</td></tr>
+            <tr><td>Compatibility with Ascon v1.2</td><td>None, deliberately. Different algorithms.</td></tr>
+            <tr><td>Independent cryptographic audit</td><td>Not done.</td></tr>
+            <tr><td>FIPS or NIST validation</td><td>Not a validated module.</td></tr>
+            <tr><td>Constant-time tag comparison</td><td>Full-scan comparison in the source; no guarantee about generated code.</td></tr>
+            <tr><td>Constant-time overall</td><td>Not claimed. See below.</td></tr>
+            <tr><td>Zeroization of key material</td><td>Not possible to guarantee under the OCaml GC.</td></tr>
+            <tr><td>Nonce misuse resistance</td><td>None. Ascon-AEAD128 has none by design.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="nonces">Nonce discipline is the caller's job</h2>
+
+      <p>
+        Reusing a nonce with the same Ascon-AEAD128 key breaks the scheme. It
+        is not a weakening that costs you some security margin; it is a
+        failure of the construction's stated requirement. The library
+        validates that a nonce is 16 bytes and can do nothing else about it: it
+        has no state across calls and cannot detect reuse.
+      </p>
+
+      <p>
+        A counter that is persisted before use, or a random nonce from a
+        cryptographic source with a documented rekey bound, are the usual
+        answers. Whichever you pick, that choice is a property of your
+        protocol, not of this code.
+      </p>
+
+      <h2 id="timing">Timing behaviour</h2>
+
+      <p>
+        Authentication tags are compared with a dedicated routine that scans
+        every byte and has no content-dependent early exit.
+        <code>Bytes.equal</code> is never used on a tag. The permutation itself
+        is written with bitwise and shift operations on fixed-width
+        <code>Int64</code> values, with no secret-dependent branches or table
+        lookups.
+      </p>
+
+      <p>
+        That is the source-level story, and it is where the claim stops.
+        <strong>No formal constant-time guarantee is made</strong> for the
+        generated code, for the OCaml compiler that produced it, or for the
+        runtime it executes on. Establishing one would require inspecting
+        native output on every target compiler, which has not been done. If
+        your threat model includes a local timing adversary, this library has
+        not been shown to be adequate for it.
+      </p>
+
+      <h2 id="memory">Secrets in the OCaml heap</h2>
+
+      <p>
+        OCaml heap data cannot be reliably zeroized. The garbage collector is
+        free to copy a value during a minor collection or a compaction, and the
+        original bytes stay wherever they were until something else overwrites
+        them. Keys, plaintext, and intermediate sponge state are all ordinary
+        heap values and all subject to this.
+      </p>
+
+      <p>
+        What the library does do: a rejected candidate plaintext is overwritten
+        with zeros before it is dropped. Treat that as tidiness rather than a
+        guarantee &mdash; the collector may already have copied it elsewhere.
+        Keys and nonces are copied into abstract, length-validated values on
+        construction, so a caller mutating the original buffer afterwards
+        cannot change what a cipher operation uses.
+      </p>
+
+      <h2 id="failures">Failures are values</h2>
+
+      <p>
+        Ordinary authentication failure returns
+        <code>Error `Authentication_failure</code>. It is never raised as an
+        exception, so a forgery cannot travel up a call stack disguised as a
+        programming error, and a handler cannot swallow it by accident along
+        with unrelated failures. Decryption computes the whole candidate
+        plaintext, verifies the full 128-bit tag, and only then returns
+        anything.
+      </p>
+
+      <p>
+        Do not report to a peer <em>which</em> error occurred. The distinction
+        between a malformed record and a failed tag is useful in your logs and
+        useless to an attacker only as long as it stays there.
+      </p>
+
+      <h2 id="checklist">What the implementation self-review covered</h2>
+
+      <p>
+        <a href="https://github.com/thevilledev/ocaml-ascon/blob/main/SECURITY_REVIEW.md"><code>SECURITY_REVIEW.md</code></a>
+        records a focused self-review against the standard. It is not an audit;
+        it is a checklist of the things that most often go wrong in a
+        from-scratch implementation, with the answer recorded for each.
+      </p>
+
+      <dl>
+        <dt><strong>Representation</strong></dt>
+        <dd>
+          Every external word is loaded and stored byte by byte in explicit
+          little-endian order. There are no host-endian casts and no
+          big-endian compatibility path, which is what keeps the v1.2 confusion
+          from being possible at all.
+        </dd>
+        <dt><strong>Permutation constants</strong></dt>
+        <dd>
+          The round-constant schedule is
+          <code>f0 e1 d2 c3 b4 a5 96 87 78 69 5a 4b</code>, XORed into the low
+          byte of S2, with <code>p[8]</code> starting at <code>b4</code>.
+          Diffusion rotations are (19,&nbsp;28), (61,&nbsp;39), (1,&nbsp;6),
+          (10,&nbsp;17) and (7,&nbsp;41). Zero-state <code>p[8]</code> and
+          <code>p[12]</code> outputs were taken from the official C reference,
+          and NIST Appendix B's three precomputed initialization states are
+          checked too.
+        </dd>
+        <dt><strong>Padding and domain separation</strong></dt>
+        <dd>
+          Byte-aligned padding XORs <code>0x01</code> at the first unused byte,
+          and a message ending exactly on a rate boundary gets its own empty
+          padded block. AEAD applies the domain-separation bit after the
+          associated-data phase including when that data is empty.
+        </dd>
+        <dt><strong>The AEAD tail</strong></dt>
+        <dd>
+          Encryption emits only the occupied rate bytes before padding.
+          Decryption replaces only the received low bytes in the state and
+          preserves the rest &mdash; the place a from-scratch implementation is
+          most likely to be subtly wrong.
+        </dd>
+        <dt><strong>Lengths</strong></dt>
+        <dd>
+          One-shot XOF and CXOF lengths are validated before allocation.
+          Combined AEAD allocation checks for addition overflow. Key, nonce and
+          tag lengths are exact.
+        </dd>
+      </dl>
+
+      <h2 id="open">What still needs human attention</h2>
+
+      <p>The same document is explicit about what a reviewer should not take on trust:</p>
+
+      <ol>
+        <li>Compare the bitsliced S-box and rotations directly against Section 3 of the final standard, and inspect native code on each intended compiler.</li>
+        <li>Re-check the AEAD last-block state replacement for every tail length from 0 to 15.</li>
+        <li>Review compiler output and runtime behaviour before making any stronger timing statement than the one above.</li>
+        <li>Assess allocation volume, GC behaviour, and secret lifetime for each target deployment.</li>
+        <li>Re-run the vectors and the differential harness from a clean checkout against a separately obtained official reference.</li>
+        <li>Add a real 32-bit runtime CI job. The code is written for one; the current hosted matrix does not exercise it.</li>
+      </ol>
+
+      <h2 id="reporting">Reporting a vulnerability</h2>
+
+      <p>
+        Please do not open a public issue for a suspected vulnerability. Use
+        the repository's
+        <a href="https://github.com/thevilledev/ocaml-ascon/security/advisories/new">private advisory form</a>.
+      </p>
+
+      <p>
+        Include the affected version or commit, a minimal reproducer where
+        possible, the expected impact, and whether disclosure is
+        time-sensitive. Receipt should be acknowledged within seven days.
+      </p>
+
+      <p>
+        Until the first stable release, security fixes are made on
+        <code>main</code>. After it, the latest minor release line receives
+        them. The full policy is in
+        <a href="https://github.com/thevilledev/ocaml-ascon/blob/main/SECURITY.md"><code>SECURITY.md</code></a>.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        <a href="index.html">overview</a> &middot;
+        <a href="usage.html">usage</a> &middot;
+        <a href="https://github.com/thevilledev/ocaml-ascon/blob/main/SECURITY.md"><code>SECURITY.md</code></a> &middot;
+        <a href="https://github.com/thevilledev/ocaml-ascon/blob/main/SECURITY_REVIEW.md"><code>SECURITY_REVIEW.md</code></a>
+      </p>
+    </footer>
+  </body>
+</html>

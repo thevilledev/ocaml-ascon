@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="The complete public API of the ascon OCaml library: Aead128, Hash256, Xof128, and Cxof128.">
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="ascon API reference">
+    <meta property="og:description" content="Every exported type and value, and what is deliberately left out.">
+    <meta property="og:url" content="https://ville.dev/ocaml-ascon/api.html">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="ascon API reference">
+    <meta name="twitter:description" content="Every exported type and value, and what is deliberately left out.">
+    <link rel="canonical" href="https://ville.dev/ocaml-ascon/api.html">
+    <link rel="stylesheet" href="styles.css?v=20260829">
+    <title>ascon API reference</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <nav class="top" aria-label="Primary navigation">
+      [ <a href="index.html">overview</a> |
+      <a href="usage.html">usage</a> |
+      api |
+      <a href="benchmarks.html">benchmarks</a> |
+      <a href="security.html">security</a> |
+      <a href="development.html">dev</a> |
+      <a href="https://github.com/thevilledev/ocaml-ascon">source</a> ]
+    </nav>
+
+    <main id="content">
+      <h1>API</h1>
+
+      <p>
+        The installed surface is one module, <code>Ascon</code>, holding four
+        submodules. This page lists it in full; the generated odoc pages carry
+        the same signatures with their documentation comments attached.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Sizes, all in bytes</caption>
+          <thead>
+            <tr><th scope="col">Value</th><th scope="col" class="n">Bytes</th><th scope="col">Note</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Aead128.key_size</code></td><td class="n">16</td><td>Exact; not a maximum.</td></tr>
+            <tr><td><code>Aead128.nonce_size</code></td><td class="n">16</td><td>Exact; must be unique per key.</td></tr>
+            <tr><td><code>Aead128.tag_size</code></td><td class="n">16</td><td>Full tags only in this release.</td></tr>
+            <tr><td><code>Hash256.digest_size</code></td><td class="n">32</td><td>Fixed output length.</td></tr>
+            <tr><td>CXOF customization maximum</td><td class="n">256</td><td>Enforced by <code>Cxof128.init</code>; not exported as a value.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="aead128">Ascon.Aead128</h2>
+
+      <p>
+        Authenticated encryption with associated data. Keys and nonces are
+        abstract: the only way to build one is through a constructor that
+        checks the length and copies the input.
+      </p>
+
+      <pre><code>val key_size : int
+val nonce_size : int
+val tag_size : int
+
+module Key : sig
+  type t
+  val of_bytes : bytes -&gt; (t, [ `Invalid_length ]) result
+  val of_string : string -&gt; (t, [ `Invalid_length ]) result
+end
+
+module Nonce : sig
+  type t
+  val of_bytes : bytes -&gt; (t, [ `Invalid_length ]) result
+  val of_string : string -&gt; (t, [ `Invalid_length ]) result
+end
+
+val encrypt :
+  key:Key.t -&gt;
+  nonce:Nonce.t -&gt;
+  associated_data:bytes -&gt;
+  plaintext:bytes -&gt;
+  bytes * bytes
+
+val decrypt :
+  key:Key.t -&gt;
+  nonce:Nonce.t -&gt;
+  associated_data:bytes -&gt;
+  ciphertext:bytes -&gt;
+  tag:bytes -&gt;
+  (bytes, [ `Authentication_failure | `Invalid_tag_length ]) result
+
+val encrypt_combined :
+  key:Key.t -&gt;
+  nonce:Nonce.t -&gt;
+  associated_data:bytes -&gt;
+  plaintext:bytes -&gt;
+  bytes
+
+val decrypt_combined :
+  key:Key.t -&gt;
+  nonce:Nonce.t -&gt;
+  associated_data:bytes -&gt;
+  bytes -&gt;
+  (bytes, [ `Authentication_failure | `Invalid_tag_length ]) result</code></pre>
+
+      <ul>
+        <li><code>encrypt</code> returns <code>(ciphertext, tag)</code> detached; the ciphertext has the same length as the plaintext.</li>
+        <li><code>encrypt_combined</code> returns <code>ciphertext || tag</code>, which is 16 bytes longer than the plaintext.</li>
+        <li><code>decrypt_combined</code> takes that blob positionally and rejects anything shorter than <code>tag_size</code> as <code>`Invalid_tag_length</code>.</li>
+        <li><code>associated_data</code> is required, not optional. Pass <code>Bytes.empty</code> when there is none; an empty string and an absent one are the same input to the standard.</li>
+        <li>Both decrypt functions release plaintext only after the full tag verifies. There is no partial or streaming decrypt.</li>
+      </ul>
+
+      <p>
+        <code>encrypt_combined</code> raises <code>Invalid_argument</code> for
+        the one case it cannot express: a plaintext within 16 bytes of
+        <code>Sys.max_string_length</code>, where the combined result would not
+        fit in a <code>bytes</code>. Every other failure in this module is a
+        typed <code>Error</code>.
+      </p>
+
+      <h2 id="hash256">Ascon.Hash256</h2>
+
+      <p>A fixed 256-bit hash with a persistent incremental context.</p>
+
+      <pre><code>type ctx
+
+val digest_size : int
+
+val init : unit -&gt; ctx
+val feed : ctx -&gt; bytes -&gt; ctx
+val feed_string : ctx -&gt; string -&gt; ctx
+val get : ctx -&gt; bytes
+
+val digest : bytes -&gt; bytes
+val digest_string : string -&gt; bytes</code></pre>
+
+      <ul>
+        <li><code>ctx</code> is immutable: <code>feed</code> returns a new context and leaves its argument usable.</li>
+        <li><code>get</code> does not consume or finalize the context, so a shared prefix can be extended more than once.</li>
+        <li>Nothing in this module can fail. There is no <code>result</code> anywhere in the signature.</li>
+      </ul>
+
+      <h2 id="xof128">Ascon.Xof128</h2>
+
+      <p>
+        The extendable-output function. The absorbing and squeezing phases are
+        separate types, so the lifecycle is checked at compile time.
+      </p>
+
+      <pre><code>type absorbing
+type squeezing
+type length_error = [ `Invalid_length ]
+
+val init : unit -&gt; absorbing
+val absorb : absorbing -&gt; bytes -&gt; absorbing
+val start_squeezing : absorbing -&gt; squeezing
+
+val squeeze :
+  squeezing -&gt; length:int -&gt; (squeezing * bytes, length_error) result
+
+val digest : bytes -&gt; length:int -&gt; (bytes, length_error) result</code></pre>
+
+      <ul>
+        <li><code>start_squeezing</code> is one-way. Its result has type <code>squeezing</code>, which <code>absorb</code> does not accept.</li>
+        <li><code>squeeze</code> returns the next state with its output, so successive calls continue the same stream. Their concatenation equals one longer squeeze.</li>
+        <li>A zero <code>length</code> to <code>squeeze</code> is a no-op returning empty output, not an error.</li>
+        <li><code>digest</code> requires a positive <code>length</code>, as SP 800-232 does.</li>
+      </ul>
+
+      <h2 id="cxof128">Ascon.Cxof128</h2>
+
+      <p>
+        The customized XOF. It differs from <code>Xof128</code> in exactly one
+        way: a customization string, processed before any message byte, that
+        domain-separates the output.
+      </p>
+
+      <pre><code>type absorbing
+type squeezing
+type error = [ `Customization_too_long | `Invalid_length ]
+
+val init :
+  customization:bytes -&gt; (absorbing, [ `Customization_too_long ]) result
+
+val absorb : absorbing -&gt; bytes -&gt; absorbing
+val start_squeezing : absorbing -&gt; squeezing
+
+val squeeze :
+  squeezing -&gt; length:int -&gt; (squeezing * bytes, [ `Invalid_length ]) result
+
+val digest :
+  customization:bytes -&gt;
+  message:bytes -&gt;
+  length:int -&gt;
+  (bytes, error) result</code></pre>
+
+      <ul>
+        <li><code>init</code> rejects customization strings over 256 bytes and fully absorbs the accepted ones before returning, so the cost is paid once per context.</li>
+        <li>These <code>absorbing</code> and <code>squeezing</code> types are distinct from <code>Xof128</code>'s. The two constructions cannot be mixed by accident.</li>
+        <li>Different customization strings give unrelated output for the same message. That is the point of the construction, and the tests assert it.</li>
+      </ul>
+
+      <h2 id="errors">Error summary</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Polymorphic variants used across the API</caption>
+          <thead>
+            <tr><th scope="col">Variant</th><th scope="col">Where</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>`Invalid_length</code></td><td>Key and nonce constructors; XOF and CXOF lengths</td></tr>
+            <tr><td><code>`Authentication_failure</code></td><td><code>Aead128.decrypt</code>, <code>Aead128.decrypt_combined</code></td></tr>
+            <tr><td><code>`Invalid_tag_length</code></td><td><code>Aead128.decrypt</code>, <code>Aead128.decrypt_combined</code></td></tr>
+            <tr><td><code>`Customization_too_long</code></td><td><code>Cxof128.init</code>, <code>Cxof128.digest</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Each error set is written out per function rather than shared, so a
+        <code>match</code> stays exhaustive without a catch-all case. See
+        <a href="usage.html#errors">usage</a> for what each one means in
+        practice.
+      </p>
+
+      <h2 id="not-exported">Deliberately not exported</h2>
+
+      <p>
+        The internal modules &mdash; the raw state, the permutation, the
+        endianness helpers, the sponge, and the tag comparison &mdash; are
+        built into the library but are not part of the installed API. They can
+        change in a patch release.
+      </p>
+
+      <ul>
+        <li><strong>The permutation.</strong> <code>p[8]</code> and <code>p[12]</code> are not callable. Building a new construction on them is not a supported use.</li>
+        <li><strong>Tag truncation.</strong> Only 16-byte tags are produced or accepted.</li>
+        <li><strong>Nonce masking.</strong> Not implemented.</li>
+        <li><strong>Incremental AEAD.</strong> Not implemented, so that unauthenticated plaintext is never released.</li>
+        <li><strong>Bit-level inputs.</strong> Every message argument is whole bytes; the API makes no arbitrary-bitstring claim.</li>
+      </ul>
+
+      <p>
+        Build the odoc pages from a checkout with
+        <code>dune build @doc</code>; see
+        <a href="development.html">development</a>.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        <a href="usage.html">usage</a> &middot;
+        <a href="security.html">security notes</a> &middot;
+        <a href="https://github.com/thevilledev/ocaml-ascon/blob/main/lib/ascon.mli"><code>lib/ascon.mli</code></a>
+      </p>
+    </footer>
+  </body>
+</html>

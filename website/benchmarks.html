@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Measured throughput and allocation for the pure OCaml Ascon implementation, and the permutation cost that explains both.">
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="ascon benchmarks">
+    <meta property="og:description" content="Throughput, allocation, and the permutation cost that explains both.">
+    <meta property="og:url" content="https://ville.dev/ocaml-ascon/benchmarks.html">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="ascon benchmarks">
+    <meta name="twitter:description" content="Throughput, allocation, and the permutation cost that explains both.">
+    <link rel="canonical" href="https://ville.dev/ocaml-ascon/benchmarks.html">
+    <link rel="stylesheet" href="styles.css?v=20260829">
+    <title>ascon benchmarks</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <nav class="top" aria-label="Primary navigation">
+      [ <a href="index.html">overview</a> |
+      <a href="usage.html">usage</a> |
+      <a href="api.html">api</a> |
+      benchmarks |
+      <a href="security.html">security</a> |
+      <a href="development.html">dev</a> |
+      <a href="https://github.com/thevilledev/ocaml-ascon">source</a> ]
+    </nav>
+
+    <main id="content">
+      <h1>Benchmarks</h1>
+
+      <p>
+        This is a portable pure-OCaml implementation. The
+        numbers below are a baseline to reason about and to reproduce.
+      </p>
+
+      <pre><code>dune exec --profile release bench/bench_ascon.exe</code></pre>
+
+      <div class="notice">
+        <p>
+          <strong>Measure on your own machine.</strong> These figures come from
+          one run on one laptop. Cryptographic throughput is sensitive to the
+          compiler, the runtime, and the profile; comparisons are only
+          meaningful between results measured on the same hardware.
+        </p>
+      </div>
+
+      <h2 id="permutation">Start with the permutation</h2>
+
+      <p>
+        Everything here is the same 320-bit permutation applied over and over,
+        so one number sets the ceiling for all four constructions:
+      </p>
+
+      <table>
+        <caption>Ascon-p[12], the shared 12-round permutation</caption>
+        <tbody>
+          <tr><th scope="row">Time per permutation</th><td class="n">447 ns</td></tr>
+          <tr><th scope="row">Permutations per second</th><td class="n">2.24 million</td></tr>
+          <tr><th scope="row">Time per round</th><td class="n">37 ns</td></tr>
+        </tbody>
+      </table>
+
+      <p>
+        The rest follows from the standard's parameters. Hashing absorbs 8
+        bytes per <code>p[12]</code>, which is 1.5 rounds per byte; AEAD
+        processes 16 bytes per <code>p[8]</code>, which is 0.5. At 37 ns per
+        round that predicts roughly 18 MB/s for the hash family and 54 MB/s for
+        AEAD &mdash; and that is very close to what the full constructions
+        actually measure. There is almost nothing in the hot loop but the
+        permutation.
+      </p>
+
+      <h2 id="throughput">Throughput and allocation</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Apple ARM64, macOS 26.6, OCaml 5.5.0, dune release profile</caption>
+          <thead>
+            <tr>
+              <th scope="col">Operation</th>
+              <th scope="col" class="n">1 KiB</th>
+              <th scope="col" class="n">1 MiB</th>
+              <th scope="col" class="n">Allocated words/op at 1 KiB</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>AEAD128 encrypt</td><td class="n">47.4 MB/s</td><td class="n">51.0 MB/s</td><td class="n">15,898</td></tr>
+            <tr><td>AEAD128 decrypt</td><td class="n">48.4 MB/s</td><td class="n">42.4 MB/s</td><td class="n">15,898</td></tr>
+            <tr><td>Hash256</td><td class="n">18.8 MB/s</td><td class="n">19.9 MB/s</td><td class="n">44,254</td></tr>
+            <tr><td>XOF128, 32-byte output</td><td class="n">19.2 MB/s</td><td class="n">18.6 MB/s</td><td class="n">44,254</td></tr>
+            <tr><td>CXOF128, 32-byte output</td><td class="n">17.2 MB/s</td><td class="n">19.2 MB/s</td><td class="n">45,295</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        AEAD runs about two and a half times faster per byte than the hash
+        family. That gap is the standard's, not the implementation's: the
+        parameters alone predict 3&times;, and what is missing is the two extra
+        <code>p[12]</code> permutations and the associated-data blocks that
+        every AEAD message pays regardless of its length.
+      </p>
+
+      <h2 id="allocation">Where the allocation goes</h2>
+
+      <p>
+        The allocation column looks alarming until you divide it by the number
+        of permutation rounds each operation performs. A 1 KiB
+        <code>Hash256</code> digest runs 134 permutations, or 1,608 rounds; a 1
+        KiB AEAD encryption runs 552 rounds. Both land at roughly
+        <strong>28 words per round</strong>.
+      </p>
+
+      <p>
+        That is not the persistent-context API being wasteful. Absorbing copies
+        the five-word state once per call, not once per block &mdash; a few
+        dozen words. The rest is OCaml boxing <code>Int64</code> intermediates
+        inside the round function, which computes ten or so of them per round
+        and stores five back into the state record. It is short-lived minor-heap
+        garbage that the collector handles cheaply, but on an allocation-averse
+        target it is the number to know.
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Permutation rounds per operation</caption>
+          <thead>
+            <tr>
+              <th scope="col">Operation on 1 KiB</th>
+              <th scope="col">Rounds</th>
+              <th scope="col" class="n">Words/round</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Hash256 digest</td>
+              <td>134 &times; <code>p[12]</code> = 1,608</td>
+              <td class="n">27.5</td>
+            </tr>
+            <tr>
+              <td>AEAD128 encrypt</td>
+              <td>66 &times; <code>p[8]</code> + 2 &times; <code>p[12]</code> = 552</td>
+              <td class="n">28.8</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="fine">
+        The Hash256 count is one <code>p[12]</code> to initialize, 128 to
+        absorb the message, one for the padded final block, and four to squeeze
+        32 bytes. The AEAD count is 64 payload blocks plus two associated-data
+        blocks at <code>p[8]</code>, with <code>p[12]</code> at initialization
+        and finalization.
+      </p>
+
+      <h2 id="matrix">The full matrix</h2>
+
+      <p>
+        The committed benchmark reports every construction at 0, 8, 16, 32, 64,
+        256, 4,096, 16,384, and 1,048,576 bytes as well as the two sizes above,
+        printing nanoseconds per operation, throughput, and allocated words for
+        each. The small sizes are the interesting ones for a lightweight
+        primitive: at 8 or 16 bytes the fixed cost of initialization and
+        finalization dominates completely, and throughput in MB/s stops being a
+        useful way to read the result. Compare <code>ns/op</code> there
+        instead.
+      </p>
+
+      <h2 id="honest">What these numbers are not</h2>
+
+      <ul>
+        <li>
+          <strong>Not a comparison with C.</strong> The official C
+          implementations, especially with hardware-assisted or bitsliced
+          builds, are substantially faster. Nothing here competes with them.
+        </li>
+        <li>
+          <strong>Not constant-time evidence.</strong> Throughput says nothing
+          about side channels. See the <a href="security.html">security
+          notes</a> for what is and is not claimed.
+        </li>
+        <li>
+          <strong>Not stable across compilers.</strong> The allocation profile
+          in particular depends on how much <code>Int64</code> unboxing the
+          compiler manages. Re-measure after changing OCaml versions or build
+          profile.
+        </li>
+        <li>
+          <strong>Not a regression gate.</strong> The benchmark is a developer
+          tool, run by hand; it is not part of CI.
+        </li>
+      </ul>
+
+      <p>
+        The benchmark source is
+        <a href="https://github.com/thevilledev/ocaml-ascon/blob/main/bench/bench_ascon.ml"><code>bench/bench_ascon.ml</code></a>.
+        It compacts the heap and samples <code>Gc.quick_stat</code> around each
+        measurement, and scales its iteration count so that small sizes still
+        get a meaningful sample.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        <a href="index.html">overview</a> &middot;
+        <a href="development.html">run the suite</a> &middot;
+        <a href="https://github.com/thevilledev/ocaml-ascon">source</a>
+      </p>
+    </footer>
+  </body>
+</html>
