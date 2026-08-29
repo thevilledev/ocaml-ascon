@@ -1,0 +1,345 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta
+      name="description"
+      content="ascon is a pure OCaml implementation of the final NIST SP 800-232 Ascon-AEAD128, Hash256, XOF128, and CXOF128 algorithms."
+    >
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="ascon">
+    <meta
+      property="og:description"
+      content="NIST SP 800-232 Ascon in pure OCaml. No C, no Unix, no runtime dependencies."
+    >
+    <meta property="og:url" content="https://ville.dev/ocaml-ascon/">
+    <meta property="og:image" content="https://ville.dev/ocaml-ascon/og.png">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:alt" content="ascon — NIST SP 800-232 in pure OCaml">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="ascon">
+    <meta name="twitter:description" content="NIST SP 800-232 Ascon in pure OCaml. No C, no Unix, no runtime dependencies.">
+    <meta name="twitter:image" content="https://ville.dev/ocaml-ascon/og.png">
+    <meta name="twitter:image:alt" content="ascon — NIST SP 800-232 in pure OCaml">
+    <link rel="canonical" href="https://ville.dev/ocaml-ascon/">
+    <link rel="stylesheet" href="styles.css?v=20260829">
+    <title>ascon: NIST SP 800-232 in pure OCaml</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <nav class="top" aria-label="Primary navigation">
+      [ overview |
+      <a href="usage.html">usage</a> |
+      <a href="api.html">api</a> |
+      <a href="benchmarks.html">benchmarks</a> |
+      <a href="security.html">security</a> |
+      <a href="development.html">dev</a> |
+      <a href="https://github.com/thevilledev/ocaml-ascon">source</a> ]
+    </nav>
+
+    <main id="content">
+      <svg class="diagram diagram-wide" viewBox="0 0 640 216" role="img"
+        aria-label="The Ascon sponge: a 320-bit state split into a rate part and a capacity part. Message blocks M1 and M2 are XORed into the rate, each followed by the permutation p; after the last absorbed block the rate is read out as output blocks Z1 and Z2, with a permutation between them.">
+        <defs>
+          <marker id="tip-w" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0.5 L10 5 L0 9.5 Z" fill="currentColor"></path>
+          </marker>
+        </defs>
+
+        <text class="cap" x="42" y="88">IV</text>
+        <rect class="box" x="20" y="96" width="44" height="76"></rect>
+        <line class="wire" x1="20" y1="134" x2="64" y2="134"></line>
+        <g class="lbl">
+          <text x="42" y="115" dy="0.35em">r</text>
+          <text x="42" y="153" dy="0.35em">c</text>
+        </g>
+
+        <g class="wire">
+          <line x1="64" y1="115" x2="600" y2="115"></line>
+          <line x1="64" y1="153" x2="600" y2="153"></line>
+        </g>
+
+        <text class="lbl" x="98" y="34">M1</text>
+        <path class="flow" d="M98 44 L98 104" marker-end="url(#tip-w)"></path>
+        <circle class="xor" cx="98" cy="115" r="9"></circle>
+        <g class="wire">
+          <line x1="92" y1="115" x2="104" y2="115"></line>
+          <line x1="98" y1="109" x2="98" y2="121"></line>
+        </g>
+
+        <rect class="box" x="128" y="96" width="52" height="76"></rect>
+        <text class="lbl" x="154" y="134" dy="0.35em">p</text>
+
+        <text class="lbl" x="214" y="34">M2</text>
+        <path class="flow" d="M214 44 L214 104" marker-end="url(#tip-w)"></path>
+        <circle class="xor" cx="214" cy="115" r="9"></circle>
+        <g class="wire">
+          <line x1="208" y1="115" x2="220" y2="115"></line>
+          <line x1="214" y1="109" x2="214" y2="121"></line>
+        </g>
+
+        <rect class="box" x="244" y="96" width="52" height="76"></rect>
+        <text class="lbl" x="270" y="134" dy="0.35em">p</text>
+
+        <g class="tap">
+          <circle cx="324" cy="134" r="1.6"></circle>
+          <circle cx="330" cy="134" r="1.6"></circle>
+          <circle cx="336" cy="134" r="1.6"></circle>
+        </g>
+
+        <rect class="box" x="364" y="96" width="52" height="76"></rect>
+        <text class="lbl" x="390" y="134" dy="0.35em">p</text>
+
+        <line class="phase" x1="433" y1="68" x2="433" y2="190"></line>
+
+        <text class="lbl" x="450" y="34">Z1</text>
+        <path class="flow" d="M450 115 L450 44" marker-end="url(#tip-w)"></path>
+        <circle class="tap" cx="450" cy="115" r="4"></circle>
+
+        <rect class="box" x="480" y="96" width="52" height="76"></rect>
+        <text class="lbl" x="506" y="134" dy="0.35em">p</text>
+
+        <text class="lbl" x="566" y="34">Z2</text>
+        <path class="flow" d="M566 115 L566 44" marker-end="url(#tip-w)"></path>
+        <circle class="tap" cx="566" cy="115" r="4"></circle>
+
+        <text class="cap" x="248" y="206">absorb</text>
+        <text class="cap" x="516" y="206">squeeze</text>
+      </svg>
+
+      <svg class="diagram diagram-tall" viewBox="0 0 300 420" role="img"
+        aria-label="The Ascon sponge: a 320-bit state split into a rate part and a capacity part. Message blocks M1 and M2 are XORed into the rate, each followed by the permutation p; after the last absorbed block the rate is read out as output blocks Z1 and Z2, with a permutation between them.">
+        <defs>
+          <marker id="tip-t" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0 0.5 L10 5 L0 9.5 Z" fill="currentColor"></path>
+          </marker>
+        </defs>
+
+        <text class="cap" x="150" y="20">IV</text>
+        <rect class="box" x="88" y="28" width="124" height="32"></rect>
+        <line class="wire" x1="150" y1="28" x2="150" y2="60"></line>
+        <g class="lbl">
+          <text x="119" y="44" dy="0.35em">r</text>
+          <text x="181" y="44" dy="0.35em">c</text>
+        </g>
+
+        <g class="wire">
+          <line x1="119" y1="60" x2="119" y2="406"></line>
+          <line x1="181" y1="60" x2="181" y2="406"></line>
+        </g>
+
+        <text class="lbl end" x="30" y="84" dy="0.35em">M1</text>
+        <path class="flow" d="M40 84 L106 84" marker-end="url(#tip-t)"></path>
+        <circle class="xor" cx="119" cy="84" r="9"></circle>
+        <g class="wire">
+          <line x1="113" y1="84" x2="125" y2="84"></line>
+          <line x1="119" y1="78" x2="119" y2="90"></line>
+        </g>
+
+        <rect class="box" x="88" y="106" width="124" height="28"></rect>
+        <text class="lbl" x="150" y="120" dy="0.35em">p</text>
+
+        <text class="lbl end" x="30" y="158" dy="0.35em">M2</text>
+        <path class="flow" d="M40 158 L106 158" marker-end="url(#tip-t)"></path>
+        <circle class="xor" cx="119" cy="158" r="9"></circle>
+        <g class="wire">
+          <line x1="113" y1="158" x2="125" y2="158"></line>
+          <line x1="119" y1="152" x2="119" y2="164"></line>
+        </g>
+
+        <rect class="box" x="88" y="180" width="124" height="28"></rect>
+        <text class="lbl" x="150" y="194" dy="0.35em">p</text>
+
+        <g class="tap">
+          <circle cx="150" cy="226" r="1.6"></circle>
+          <circle cx="150" cy="232" r="1.6"></circle>
+          <circle cx="150" cy="238" r="1.6"></circle>
+        </g>
+        <text class="cap start" x="222" y="236">absorb</text>
+
+        <rect class="box" x="88" y="256" width="124" height="28"></rect>
+        <text class="lbl" x="150" y="270" dy="0.35em">p</text>
+
+        <line class="phase" x1="24" y1="298" x2="276" y2="298"></line>
+
+        <text class="lbl end" x="30" y="320" dy="0.35em">Z1</text>
+        <path class="flow" d="M119 320 L40 320" marker-end="url(#tip-t)"></path>
+        <circle class="tap" cx="119" cy="320" r="4"></circle>
+
+        <rect class="box" x="88" y="342" width="124" height="28"></rect>
+        <text class="lbl" x="150" y="356" dy="0.35em">p</text>
+        <text class="cap start" x="222" y="360">squeeze</text>
+
+        <text class="lbl end" x="30" y="392" dy="0.35em">Z2</text>
+        <path class="flow" d="M119 392 L40 392" marker-end="url(#tip-t)"></path>
+        <circle class="tap" cx="119" cy="392" r="4"></circle>
+      </svg>
+
+      <h1>ascon</h1>
+
+      <p>
+        A pure OCaml implementation of the final
+        <a href="https://doi.org/10.6028/NIST.SP.800-232">NIST SP 800-232</a>
+        (August 2025) Ascon standard. One 320-bit permutation, one sponge, four
+        standardized constructions &mdash; and nothing underneath the OCaml
+        standard library.
+      </p>
+
+      <ul>
+        <li><code>Ascon.Aead128</code> &mdash; authenticated encryption with associated data.</li>
+        <li><code>Ascon.Hash256</code> &mdash; a fixed 256-bit hash.</li>
+        <li><code>Ascon.Xof128</code> &mdash; an extendable-output function.</li>
+        <li><code>Ascon.Cxof128</code> &mdash; a customized extendable-output function.</li>
+      </ul>
+
+      <p>
+        The core keeps the five-word state in <code>Int64</code>, has no runtime
+        dependency beyond the standard library, and does not link Unix or C. It
+        is meant for ordinary Unix applications and MirageOS-style unikernels
+        alike.
+      </p>
+
+      <div class="notice">
+        <p>
+          <strong>This is the standardized little-endian design.</strong> It is
+          not Ascon v1.2, and it is not byte-for-byte compatible with the older
+          NIST lightweight-cryptography submission. Ciphertexts and digests
+          will not match a v1.2 implementation.
+        </p>
+      </div>
+
+      <table>
+        <caption>Current state</caption>
+        <tbody>
+          <tr><th scope="row">Release</th><td>0.1.0</td></tr>
+          <tr><th scope="row">OCaml</th><td>4.14 or newer</td></tr>
+          <tr><th scope="row">Runtime dependencies</th><td>none &mdash; no C stubs, no Unix</td></tr>
+          <tr><th scope="row">Official vectors passing</th><td>4,228</td></tr>
+          <tr><th scope="row">Independent audit</th><td>none</td></tr>
+          <tr><th scope="row">License</th><td>ISC</td></tr>
+        </tbody>
+      </table>
+
+      <h2 id="quick-start">Quick start</h2>
+
+      <pre><code>opam install ascon</code></pre>
+
+      <p>Add the library to the relevant dune stanza:</p>
+
+      <pre><code>(libraries ascon)</code></pre>
+
+      <p>Hashing is one call and cannot fail:</p>
+
+      <pre><code>let digest = Ascon.Hash256.digest_string "message"
+(* [digest] is exactly 32 bytes. *)</code></pre>
+
+      <p>
+        Authenticated encryption validates its key and nonce up front, and
+        reports authentication failure as a typed error rather than an
+        exception:
+      </p>
+
+      <pre><code>let key = Result.get_ok (Ascon.Aead128.Key.of_bytes key_bytes) in
+let nonce = Result.get_ok (Ascon.Aead128.Nonce.of_bytes nonce_bytes) in
+let ciphertext, tag =
+  Ascon.Aead128.encrypt ~key ~nonce
+    ~associated_data:(Bytes.of_string "record header")
+    ~plaintext:(Bytes.of_string "secret payload")
+in
+match Ascon.Aead128.decrypt ~key ~nonce ~associated_data ~ciphertext ~tag with
+| Ok plaintext -&gt; use plaintext
+| Error `Authentication_failure -&gt; reject_record ()
+| Error `Invalid_tag_length -&gt; reject_malformed_record ()</code></pre>
+
+      <p>
+        Decryption buffers the whole candidate plaintext and returns it only
+        after the full 128-bit tag verifies, so unauthenticated bytes never
+        reach the caller. Continue with
+        <a href="usage.html">usage</a> for the XOF lifecycle and the
+        incremental interfaces.
+      </p>
+
+      <h2 id="design">What the API commits to</h2>
+
+      <dl>
+        <dt><strong>Typed lifecycles, not conventions</strong></dt>
+        <dd>
+          <code>Xof128</code> and <code>Cxof128</code> give absorbing and
+          squeezing states distinct types. Once a state starts producing
+          output, the compiler refuses to feed it more message bytes.
+        </dd>
+        <dt><strong>Validated key material</strong></dt>
+        <dd>
+          Keys and nonces are abstract 16-byte values built by a checked
+          constructor. A wrong length is an <code>Error</code>, never a
+          silent truncation.
+        </dd>
+        <dt><strong>One-shot AEAD</strong></dt>
+        <dd>
+          There is no streaming decrypt, deliberately: an incremental API
+          would have to hand back plaintext before the tag is known.
+        </dd>
+        <dt><strong>Persistent hash and XOF contexts</strong></dt>
+        <dd>
+          Each update copies the small state and buffer, so branching and
+          reuse behave the way the types suggest, at the cost of allocation.
+        </dd>
+      </dl>
+
+      <h2 id="sponge">One permutation, four constructions</h2>
+
+      <p>
+        Every algorithm above is the same 320-bit sponge in the diagram, with a
+        different initial value, rate, and round count:
+      </p>
+
+      <div class="table-scroll">
+        <table>
+          <caption>SP 800-232 parameters as implemented</caption>
+          <thead>
+            <tr>
+              <th scope="col">Construction</th>
+              <th scope="col" class="n">Rate</th>
+              <th scope="col">Rounds</th>
+              <th scope="col">Initial value</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td><code>Aead128</code></td><td class="n">16 bytes</td><td><code>p[8]</code> per block, <code>p[12]</code> at the ends</td><td><code>0x00001000808c0001</code></td></tr>
+            <tr><td><code>Hash256</code></td><td class="n">8 bytes</td><td><code>p[12]</code></td><td><code>0x0000080100cc0002</code></td></tr>
+            <tr><td><code>Xof128</code></td><td class="n">8 bytes</td><td><code>p[12]</code></td><td><code>0x0000080000cc0003</code></td></tr>
+            <tr><td><code>Cxof128</code></td><td class="n">8 bytes</td><td><code>p[12]</code></td><td><code>0x0000080000cc0004</code></td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        The permutation itself is not part of the installed public API. See the
+        <a href="api.html">API reference</a> for the exported surface, or
+        <a href="development.html#layout">development</a> for the module
+        layout underneath it.
+      </p>
+
+      <div class="notice">
+        <p>
+          <strong>Not audited.</strong> This library has had no independent
+          cryptographic review and is not a FIPS-validated or NIST-validated
+          module. Passing the official vectors is evidence of conformance, not
+          of security. Read the <a href="security.html">security notes</a>
+          before deploying it.
+        </p>
+      </div>
+    </main>
+
+    <footer>
+      <p>
+        <a href="https://github.com/thevilledev/ocaml-ascon">github.com/thevilledev/ocaml-ascon</a>
+        &middot; <a href="https://ocaml.org/p/ascon/latest">opam</a>
+        &middot; <a href="https://github.com/thevilledev/ocaml-ascon/issues">issues</a>
+      </p>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Build, test, and understand the ascon OCaml library: module layout, the vector corpus, and the differential harness.">
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Developing ascon">
+    <meta property="og:description" content="Tests, module layout, the official vector corpus, and the differential harness.">
+    <meta property="og:url" content="https://ville.dev/ocaml-ascon/development.html">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Developing ascon">
+    <meta name="twitter:description" content="Tests, module layout, the official vector corpus, and the differential harness.">
+    <link rel="canonical" href="https://ville.dev/ocaml-ascon/development.html">
+    <link rel="stylesheet" href="styles.css?v=20260829">
+    <title>Developing ascon</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <nav class="top" aria-label="Primary navigation">
+      [ <a href="index.html">overview</a> |
+      <a href="usage.html">usage</a> |
+      <a href="api.html">api</a> |
+      <a href="benchmarks.html">benchmarks</a> |
+      <a href="security.html">security</a> |
+      dev |
+      <a href="https://github.com/thevilledev/ocaml-ascon">source</a> ]
+    </nav>
+
+    <main id="content">
+      <h1>Development</h1>
+
+      <h2 id="setup">Build and test</h2>
+
+      <pre><code>git clone https://github.com/thevilledev/ocaml-ascon.git
+cd ocaml-ascon
+opam install . --deps-only --with-test --with-doc
+dune build
+dune runtest --no-buffer
+dune build @doc</code></pre>
+
+      <p>Each example is a runnable program:</p>
+
+      <pre><code>dune exec examples/hash256.exe
+dune exec examples/xof128.exe
+dune exec examples/cxof128.exe
+dune exec examples/aead128.exe</code></pre>
+
+      <h2 id="layout">Layout</h2>
+
+      <p>
+        The public surface is a single <code>Ascon</code> module. Everything
+        under <code>lib/internal/</code> is built into the library but not
+        installed, so it can change without a breaking release.
+      </p>
+
+      <pre><code>lib/ascon.{ml,mli}           the four public constructions and typed APIs
+lib/internal/state.*         mutable five-word 320-bit state
+lib/internal/endian.*        portable little-endian loads, stores, padding
+lib/internal/permutation.*   shared p[12] / p[8] round implementation
+lib/internal/sponge.*        persistent 64-bit-rate absorb/squeeze machinery
+lib/internal/constant_time.* full-scan authentication-tag comparison
+
+bench/                       the throughput and allocation matrix
+examples/                    one runnable program per construction
+test/                        vectors, boundaries, properties
+tools/differential/          optional harness against an official C checkout</code></pre>
+
+      <p>
+        The layering is deliberate: <code>state</code> and
+        <code>permutation</code> know nothing about constructions,
+        <code>sponge</code> knows nothing about which IV it was handed, and
+        <code>ascon.ml</code> is where the standard's parameters live. AEAD does
+        not use <code>sponge</code> at all &mdash; its 16-byte rate and
+        <code>p[8]</code> schedule are different enough that sharing would
+        obscure both.
+      </p>
+
+      <h2 id="tests">What the test run covers</h2>
+
+      <p>
+        <code>dune runtest</code> runs one executable that starts from the
+        primitives and works up to the constructions. It is deterministic:
+        there is no time source and no unseeded randomness anywhere in it.
+      </p>
+
+      <ul>
+        <li>Little-endian load, store, and padding, tested independently of the permutation.</li>
+        <li><code>p[8]</code> and <code>p[12]</code> zero-state outputs sourced from the official C reference.</li>
+        <li>NIST Appendix B's three precomputed hash, XOF, and CXOF initialization states.</li>
+        <li>The complete official vector corpus &mdash; 1,089 AEAD, 1,025 Hash256, 1,025 XOF128, and 1,089 CXOF128 vectors, 4,228 in total.</li>
+        <li>Every rate boundary that matters: lengths 0, 1, 7, 8, 9, 15, 16, 17, 31, 32, 33, 63, 64, and 65.</li>
+        <li>Incremental chunking and multi-call squeezing, checked against the one-shot result.</li>
+        <li>Authentication failure after modifying ciphertext, tag, associated data, or nonce &mdash; including a single-bit sweep.</li>
+        <li>250 reproducible property-test cases.</li>
+      </ul>
+
+      <h2 id="vectors">The vector corpus</h2>
+
+      <p>
+        The four KAT files under
+        <a href="https://github.com/thevilledev/ocaml-ascon/tree/main/test/vectors"><code>test/vectors/</code></a>
+        are copied byte for byte from
+        <a href="https://github.com/ascon/ascon-c"><code>ascon/ascon-c</code></a>
+        at commit <code>446347f2</code>, with the upstream CC0 1.0 Universal
+        licence and attribution alongside them. They are the SP 800-232
+        vectors; the older v1.2 files are deliberately absent, because having
+        both in a tree is how an implementation ends up quietly testing the
+        wrong standard.
+      </p>
+
+      <p>
+        The test asserts the record count of each file before checking any
+        vector, so a truncated or partially copied corpus fails loudly instead
+        of silently passing fewer cases.
+      </p>
+
+      <h2 id="differential">Differential harness</h2>
+
+      <p>
+        An optional developer tool compares this implementation against a real
+        <code>ascon-c</code> checkout on randomized inputs:
+      </p>
+
+      <pre><code>python3 tools/differential/run.py /path/to/ascon-c --cases 100</code></pre>
+
+      <p>
+        It builds the C reference in a temporary directory. The C code is never
+        a package dependency, is not vendored, and nothing in the normal build
+        or test path touches it &mdash; supply the checkout yourself when you
+        want the comparison.
+      </p>
+
+      <h2 id="ci">Continuous integration</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Every push and pull request</caption>
+          <thead>
+            <tr><th scope="col">Job</th><th scope="col">Covers</th></tr>
+          </thead>
+          <tbody>
+            <tr><td>Linux</td><td>OCaml 4.14, 5.2, 5.4, and 5.5 &mdash; build, tests, and odoc on each</td></tr>
+            <tr><td>macOS</td><td>OCaml 5.5 &mdash; the same three steps</td></tr>
+            <tr><td>zizmor</td><td>Static analysis of the workflows themselves</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        Actions are pinned by commit SHA and run without persisted
+        credentials. The oldest supported compiler is a first-class matrix leg,
+        not a hope: 4.14 is what the opam constraint promises, so it is what CI
+        proves on every commit. There is no 32-bit runtime leg yet &mdash; the
+        code is written for one, and that gap is
+        <a href="security.html#open">recorded</a> rather than glossed over.
+      </p>
+
+      <h2 id="contributing">Contributing</h2>
+
+      <p>
+        The interesting constraint on this codebase is that its output is fixed
+        by a published standard. A change that alters any byte of any output is
+        a bug unless it makes a currently failing vector pass. That makes the
+        review question unusually simple: does the corpus still pass, and is
+        the new behaviour something the standard actually specifies?
+      </p>
+
+      <p>
+        Deferred surface &mdash; tag truncation, nonce masking, incremental
+        AEAD, arbitrary bit-length inputs &mdash; is deferred on purpose, not
+        forgotten. Each would widen what a caller can get wrong, so each needs
+        its own argument before it needs an implementation.
+      </p>
+
+      <p>
+        Use
+        <a href="https://github.com/thevilledev/ocaml-ascon/issues">issues</a>
+        for bugs and proposals, but not for suspected vulnerabilities &mdash;
+        those go through the <a href="security.html#reporting">private
+        channel</a>. Contributions are ISC-licensed.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        <a href="index.html">overview</a> &middot;
+        <a href="benchmarks.html">benchmarks</a> &middot;
+        <a href="https://github.com/thevilledev/ocaml-ascon">source</a>
+      </p>
+    </footer>
+  </body>
+</html>

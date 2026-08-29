@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="Install ascon and use Ascon-AEAD128, Hash256, XOF128, and CXOF128 from OCaml.">
+    <meta name="theme-color" content="#ffffff">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Using ascon">
+    <meta property="og:description" content="Install, hash, authenticate, and squeeze — with the typed lifecycles the API enforces.">
+    <meta property="og:url" content="https://ville.dev/ocaml-ascon/usage.html">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Using ascon">
+    <meta name="twitter:description" content="Install, hash, authenticate, and squeeze — with the typed lifecycles the API enforces.">
+    <link rel="canonical" href="https://ville.dev/ocaml-ascon/usage.html">
+    <link rel="stylesheet" href="styles.css?v=20260829">
+    <title>Using ascon</title>
+  </head>
+  <body>
+    <a class="skip-link" href="#content">Skip to content</a>
+    <nav class="top" aria-label="Primary navigation">
+      [ <a href="index.html">overview</a> |
+      usage |
+      <a href="api.html">api</a> |
+      <a href="benchmarks.html">benchmarks</a> |
+      <a href="security.html">security</a> |
+      <a href="development.html">dev</a> |
+      <a href="https://github.com/thevilledev/ocaml-ascon">source</a> ]
+    </nav>
+
+    <main id="content">
+      <h1>Usage</h1>
+
+      <p>
+        Everything lives under a single <code>Ascon</code> module with one
+        submodule per standardized construction. Inputs and outputs are
+        <code>bytes</code>; nothing here accepts arbitrary bit lengths.
+      </p>
+
+      <h2 id="install">Install</h2>
+
+      <pre><code>opam install ascon</code></pre>
+
+      <p>To build against the current checkout instead:</p>
+
+      <pre><code>opam pin add ascon.dev .</code></pre>
+
+      <p>Then add the library to the dune stanza that needs it:</p>
+
+      <pre><code>(executable
+ (name my_program)
+ (libraries ascon))</code></pre>
+
+      <p>
+        OCaml 4.14 or newer and dune 3.10 or newer are required. There is
+        nothing else to install: the package has no C stubs and does not link
+        Unix, so the same build works under MirageOS.
+      </p>
+
+      <h2 id="hash">Hash256</h2>
+
+      <p>The one-shot form takes <code>bytes</code> or a <code>string</code>:</p>
+
+      <pre><code>let digest = Ascon.Hash256.digest_string "message"
+(* [digest] is exactly Ascon.Hash256.digest_size = 32 bytes. *)</code></pre>
+
+      <p>
+        Incremental contexts are immutable. <code>feed</code> returns a new
+        context rather than mutating the old one, and <code>get</code> reads a
+        digest without consuming the context it was called on:
+      </p>
+
+      <pre><code>let digest =
+  let context = Ascon.Hash256.init () in
+  let context = Ascon.Hash256.feed_string context "first chunk" in
+  let context = Ascon.Hash256.feed context (Bytes.of_string "second chunk") in
+  Ascon.Hash256.get context</code></pre>
+
+      <p>
+        Because contexts are persistent, a prefix can be computed once and
+        reused for several suffixes. Chunk boundaries never affect the result:
+        the context holds up to seven pending bytes and completes rate blocks
+        across calls.
+      </p>
+
+      <pre><code>let prefix = Ascon.Hash256.feed_string (Ascon.Hash256.init ()) "shared header"
+let first = Ascon.Hash256.get (Ascon.Hash256.feed_string prefix "body A")
+let second = Ascon.Hash256.get (Ascon.Hash256.feed_string prefix "body B")
+(* [prefix] is unchanged and still usable. *)</code></pre>
+
+      <h2 id="aead">AEAD128</h2>
+
+      <p>
+        Keys and nonces are abstract values built by a checked constructor.
+        Exactly 16 bytes are accepted, the input is copied defensively, and any
+        other length is an error rather than a truncation:
+      </p>
+
+      <pre><code>match Ascon.Aead128.Key.of_bytes key_bytes with
+| Ok key -&gt; encrypt_with key
+| Error `Invalid_length -&gt; reject_configuration ()</code></pre>
+
+      <div class="notice">
+        <p>
+          <strong>Never reuse a nonce with the same key.</strong> Nonce reuse
+          breaks Ascon-AEAD128's security requirements outright &mdash; it is
+          not a degradation. <code>key_bytes</code> must come from a suitable
+          secure key source, and <code>nonce_bytes</code> must be unique for
+          every encryption under that key. The library cannot detect reuse for
+          you.
+        </p>
+      </div>
+
+      <p>
+        <code>encrypt</code> returns the ciphertext and tag detached.
+        <code>decrypt</code> returns the plaintext only after the tag verifies:
+      </p>
+
+      <pre><code>let () =
+  let key = Result.get_ok (Ascon.Aead128.Key.of_bytes key_bytes) in
+  let nonce = Result.get_ok (Ascon.Aead128.Nonce.of_bytes nonce_bytes) in
+  let associated_data = Bytes.of_string "record header" in
+  let plaintext = Bytes.of_string "secret payload" in
+  let ciphertext, tag =
+    Ascon.Aead128.encrypt ~key ~nonce ~associated_data ~plaintext
+  in
+  match Ascon.Aead128.decrypt ~key ~nonce ~associated_data ~ciphertext ~tag with
+  | Ok authenticated_plaintext -&gt; use authenticated_plaintext
+  | Error `Authentication_failure -&gt; reject_record ()
+  | Error `Invalid_tag_length -&gt; reject_malformed_record ()</code></pre>
+
+      <p>
+        Associated data is authenticated but not encrypted, and it is a
+        required argument: pass <code>Bytes.empty</code> when a message has
+        none. Both peers must agree on it exactly, or authentication fails.
+      </p>
+
+      <h3 id="combined">Combined ciphertext and tag</h3>
+
+      <p>
+        When a wire format carries one blob, the combined helpers append the
+        tag for you and split it back off on the way in:
+      </p>
+
+      <pre><code>let record = Ascon.Aead128.encrypt_combined ~key ~nonce ~associated_data ~plaintext in
+(* Bytes.length record = Bytes.length plaintext + Ascon.Aead128.tag_size *)
+
+match Ascon.Aead128.decrypt_combined ~key ~nonce ~associated_data record with
+| Ok plaintext -&gt; use plaintext
+| Error `Authentication_failure -&gt; reject_record ()
+| Error `Invalid_tag_length -&gt; reject_malformed_record ()</code></pre>
+
+      <p>
+        A blob shorter than 16 bytes cannot contain a tag at all, so
+        <code>decrypt_combined</code> reports
+        <code>`Invalid_tag_length</code> for it. That distinction is about the
+        shape of the input, not about the key: treat both errors the same way
+        in a protocol, and never report which one occurred to a remote peer.
+      </p>
+
+      <h3 id="failure">What failure means</h3>
+
+      <p>
+        Decryption computes the whole candidate plaintext into a buffer,
+        compares the full 128-bit tag with a comparison that scans every byte,
+        and returns the buffer only on success. A rejected buffer is
+        overwritten on a best-effort basis before it is dropped. Failure is a
+        typed <code>Error</code>, not an exception, so an ordinary forgery
+        cannot escape as a stray <code>Failure</code> up the call stack.
+      </p>
+
+      <h2 id="xof">XOF128</h2>
+
+      <p>The one-shot form asks for a length up front:</p>
+
+      <pre><code>match Ascon.Xof128.digest (Bytes.of_string "message") ~length:64 with
+| Ok output -&gt; use output
+| Error `Invalid_length -&gt; assert false</code></pre>
+
+      <p>
+        The incremental form encodes the sponge's lifecycle in the types.
+        <code>absorbing</code> and <code>squeezing</code> are distinct, so a
+        state that has started producing output cannot be passed back to
+        <code>absorb</code> &mdash; that is a compile error, not a runtime
+        check:
+      </p>
+
+      <pre><code>let () =
+  let absorbing = Ascon.Xof128.init () in
+  let absorbing = Ascon.Xof128.absorb absorbing (Bytes.of_string "first ") in
+  let absorbing = Ascon.Xof128.absorb absorbing (Bytes.of_string "second") in
+  let squeezing = Ascon.Xof128.start_squeezing absorbing in
+  let squeezing, first =
+    Result.get_ok (Ascon.Xof128.squeeze squeezing ~length:17)
+  in
+  let _squeezing, next =
+    Result.get_ok (Ascon.Xof128.squeeze squeezing ~length:15)
+  in
+  assert (Bytes.length first + Bytes.length next = 32)</code></pre>
+
+      <p>
+        Repeated squeezes produce consecutive output: concatenating them gives
+        exactly the same bytes as one long squeeze from an equivalent state,
+        whatever the split. Each call returns the next state alongside its
+        output, so an unbounded keystream is a fold rather than a mutation.
+      </p>
+
+      <h2 id="cxof">CXOF128</h2>
+
+      <p>
+        A customization string is explicit domain separation: two calls that
+        differ only in customization produce unrelated output. SP 800-232 caps
+        it at 256 bytes, and the library enforces that cap.
+      </p>
+
+      <pre><code>let () =
+  let output =
+    Ascon.Cxof128.digest
+      ~customization:(Bytes.of_string "com.example.protocol/transcript-v1")
+      ~message:(Bytes.of_string "message")
+      ~length:32
+  in
+  match output with
+  | Ok bytes -&gt; use bytes
+  | Error `Customization_too_long -&gt; reject_configuration ()
+  | Error `Invalid_length -&gt; assert false</code></pre>
+
+      <p>
+        The incremental form validates customization first, because that is the
+        only part that can fail before any message byte is seen:
+      </p>
+
+      <pre><code>match Ascon.Cxof128.init ~customization with
+| Error `Customization_too_long -&gt; reject_configuration ()
+| Ok absorbing -&gt;
+  let squeezing =
+    Ascon.Cxof128.start_squeezing (Ascon.Cxof128.absorb absorbing message)
+  in
+  (match Ascon.Cxof128.squeeze squeezing ~length:32 with
+   | Ok (_, output) -&gt; use output
+   | Error `Invalid_length -&gt; assert false)</code></pre>
+
+      <p>
+        Customization strings are fully processed by <code>init</code>, so a
+        long-lived protocol context pays for them once. Pick a value that
+        cannot collide with another protocol's &mdash; a domain-qualified
+        string with a version, as above.
+      </p>
+
+      <h2 id="errors">Error reference</h2>
+
+      <div class="table-scroll">
+        <table>
+          <caption>Every error the public API can return</caption>
+          <thead>
+            <tr>
+              <th scope="col">Error</th>
+              <th scope="col">Returned by</th>
+              <th scope="col">Means</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>`Invalid_length</code></td>
+              <td><code>Key.of_bytes</code>, <code>Nonce.of_bytes</code>, and the <code>of_string</code> forms</td>
+              <td>The input was not exactly 16 bytes. Nothing was truncated.</td>
+            </tr>
+            <tr>
+              <td><code>`Invalid_length</code></td>
+              <td><code>Xof128.squeeze</code>, <code>Cxof128.squeeze</code>, and both <code>digest</code> forms</td>
+              <td>A one-shot length was not positive, or a requested length is unrepresentable. Checked before allocation.</td>
+            </tr>
+            <tr>
+              <td><code>`Authentication_failure</code></td>
+              <td><code>Aead128.decrypt</code>, <code>Aead128.decrypt_combined</code></td>
+              <td>The tag did not verify. The candidate plaintext is discarded.</td>
+            </tr>
+            <tr>
+              <td><code>`Invalid_tag_length</code></td>
+              <td><code>Aead128.decrypt</code>, <code>Aead128.decrypt_combined</code></td>
+              <td>The tag was not 16 bytes, or the combined blob was too short to hold one. This release supports full tags only.</td>
+            </tr>
+            <tr>
+              <td><code>`Customization_too_long</code></td>
+              <td><code>Cxof128.init</code>, <code>Cxof128.digest</code></td>
+              <td>The customization string exceeded the standard's 256-byte maximum.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p>
+        A zero-length <em>incremental</em> squeeze is not an error: it returns
+        an empty result and the same state, so a loop that asks for whatever is
+        left needs no special case. Only the one-shot <code>digest</code>
+        functions require a positive length, as SP 800-232 does.
+      </p>
+
+      <h2 id="limits">What this release does not do</h2>
+
+      <ul>
+        <li>Whole bytes only. Arbitrary bit-length inputs are outside the API.</li>
+        <li>Full 128-bit tags only. Tag truncation is deliberately deferred.</li>
+        <li>No nonce masking.</li>
+        <li>No incremental AEAD &mdash; see <a href="#failure">above</a> for why.</li>
+        <li>The raw permutation is not exported.</li>
+      </ul>
+
+      <p>
+        Four complete runnable programs live in
+        <a href="https://github.com/thevilledev/ocaml-ascon/tree/main/examples"><code>examples/</code></a>,
+        one per construction. The exact signatures are on the
+        <a href="api.html">API reference</a>.
+      </p>
+    </main>
+
+    <footer>
+      <p>
+        <a href="index.html">overview</a> &middot;
+        <a href="api.html">API reference</a> &middot;
+        <a href="security.html">security notes</a> &middot;
+        <a href="https://github.com/thevilledev/ocaml-ascon/issues">issues</a>
+      </p>
+    </footer>
+  </body>
+</html>
