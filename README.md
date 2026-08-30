@@ -1,5 +1,7 @@
 # ascon — NIST SP 800-232 in pure OCaml
 
+[Available on opam](https://opam.ocaml.org/packages/ascon/).
+
 `ascon` is a small, portable implementation of the final **NIST SP 800-232
 (August 2025)** Ascon standard. It provides:
 
@@ -31,7 +33,7 @@ equivalent to either kind of review.
 
 ## Installation
 
-Once published to opam:
+Install from opam:
 
 ```sh
 opam install ascon
