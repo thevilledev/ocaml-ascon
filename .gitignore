@@ -2,3 +2,4 @@
 /*.merlin
 /*.install
 /.opam-switch/
+.DS_Store
