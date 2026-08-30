@@ -2,7 +2,6 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://ville.dev/ocaml-ascon/</loc></url>
   <url><loc>https://ville.dev/ocaml-ascon/usage.html</loc></url>
-  <url><loc>https://ville.dev/ocaml-ascon/api.html</loc></url>
   <url><loc>https://ville.dev/ocaml-ascon/benchmarks.html</loc></url>
   <url><loc>https://ville.dev/ocaml-ascon/security.html</loc></url>
   <url><loc>https://ville.dev/ocaml-ascon/development.html</loc></url>
