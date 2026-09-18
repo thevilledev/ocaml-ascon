@@ -141,7 +141,7 @@ tools/differential/          optional harness against an official C checkout</co
             <tr><th scope="col">Job</th><th scope="col">Covers</th></tr>
           </thead>
           <tbody>
-            <tr><td>Linux</td><td>OCaml 4.14, 5.2, 5.4, and 5.5 &mdash; build, tests, and odoc on each</td></tr>
+            <tr><td>Linux</td><td>OCaml 4.11, 5.2, 5.4, and 5.5 &mdash; build, tests, and odoc on each</td></tr>
             <tr><td>macOS</td><td>OCaml 5.5 &mdash; the same three steps</td></tr>
             <tr><td>zizmor</td><td>Static analysis of the workflows themselves</td></tr>
           </tbody>
@@ -151,7 +151,7 @@ tools/differential/          optional harness against an official C checkout</co
       <p>
         Actions are pinned by commit SHA and run without persisted
         credentials. The oldest supported compiler is a first-class matrix leg,
-        not a hope: 4.14 is what the opam constraint promises, so it is what CI
+        not a hope: 4.11 is what the opam constraint promises, so it is what CI
         proves on every commit. There is no 32-bit runtime leg yet &mdash; the
         code is written for one, and that gap is
         <a href="security.html#open">recorded</a> rather than glossed over.

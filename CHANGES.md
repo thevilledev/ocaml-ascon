@@ -1,5 +1,13 @@
 # Changes
 
+## 0.2.0 (2026-09-18)
+
+- Lower the minimum supported OCaml version from 4.14 to 4.11 and test the
+  new version floor in CI.
+- Add a project website with usage, development, benchmark, and security
+  documentation, deployed automatically through GitHub Pages.
+- Document installation from the opam repository.
+
 ## 0.1.0 (2026-08-23)
 
 - Implement Ascon-AEAD128 with detached and combined one-shot APIs.

@@ -47,7 +47,7 @@ opam pin add ascon.dev .
 
 Add `(libraries ascon)` to the relevant dune stanza.
 
-The supported compiler range begins at OCaml 4.14. CI covers OCaml 4.14 and
+The supported compiler range begins at OCaml 4.11. CI covers OCaml 4.11 and
 several current OCaml 5.x releases on Linux, plus current OCaml 5.x on macOS.
 
 ## Quick examples

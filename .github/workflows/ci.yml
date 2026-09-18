@@ -36,7 +36,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ocaml-compiler: ["4.14.x", "5.2.x", "5.4.x", "5.5.x"]
+        ocaml-compiler: ["4.11.x", "5.2.x", "5.4.x", "5.5.x"]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
