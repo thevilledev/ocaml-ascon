@@ -22,7 +22,7 @@ did not check.
 ```sh
 cd formal/tla
 ./run.sh                      # every configuration that must pass (+ translation check)
-./run.sh --expected-failures  # the documented permutation-economy findings (must FAIL)
+./run.sh --expected-failures  # finding F1 against the pre-fix eager code (must FAIL)
 ./run.sh --witnesses          # non-vacuity: every NoW_* "unreachable" claim must be refuted
 ./run.sh --all                # all three
 ./run.sh Sponge_rate8         # a single configuration
@@ -39,40 +39,45 @@ documented invariant violation.
 
 ### Results of the final `./run.sh --all` run
 
-TLC 2.19 (tla2tools 1.7.4), `WORKERS=6`, Apple ARM64, 10 cores shared with
-other jobs (wall-clock times are indicative only); total 26 min 25 s.  Every
+These results are for the fixed code (lazy squeeze). TLC 2.19 (tla2tools
+1.7.4) ran with `WORKERS=6` on Apple ARM64. The machine's 10 cores were shared
+with heavy unrelated jobs, so wall-clock times are only indicative. Every
 PlusCal translation was confirmed up to date.
 
-**Configurations that must pass** (all passed: "Model checking completed.
+**Configurations that must pass** (all passed with "Model checking completed.
 No error has been found."):
 
 | Configuration | Model / bounds | Generated | Distinct | Depth | Time |
 | --- | --- | ---: | ---: | ---: | ---: |
-| `Sponge_rate2` | Rate 2, exact XOR over bytes {0,1}, 1 domain, 3 ops, absorb 0..4, squeeze 0..3, all ops; + `Termination` | 3,092,823 | 2,870,167 | 116 | 7 min 48 s |
-| `Sponge_rate2_tagged` | Rate 2, distinct-symbol bytes, 1 domain, **5 ops**, absorb 0..3, squeeze 0..3 | 13,625,404 | 12,607,945 | 192 | 9 min 56 s |
-| `Sponge_rate3` | Rate 3, distinct symbols, 4 ops, absorb 0..6, squeeze 0..6 | 2,537,613 | 2,355,783 | 170 | 1 min 34 s |
-| `Sponge_rate8` | **Rate 8 (real)**, distinct symbols, 3 ops, absorb 0..17, squeeze {0,1,7,8,9,15,16,17}, `get` = 32 bytes | 713,794 | 662,652 | 188 | 33 s |
-| `Sponge_concurrent` | Rate 2, distinct symbols, **2 domains × 2 ops**, absorb 0..3, squeeze 0..3 | 17,038,860 | 8,740,158 | 155 | 3 min 46 s |
-| `Sponge_lazy` | lazy variant, Rate 2, 4 ops; + `PermMinimal`, `OpPermMinimal`, `HashGetMinimal` | 494,126 | 457,271 | 150 | 16 s |
-| `Sponge_lazy_rate8` | lazy variant, Rate 8, 3 ops, absorb 0..17; + the three minimality invariants | 711,266 | 660,124 | 185 | 15 s |
-| `AeadDecrypt_tag2` | tag 2 B, word 2 B, ciphertexts 0..9 B, tags 0..3 B over {0,1,2}, combined 0..6 B, `equal` on all strings 0..3 B over {0..3}; + `Termination` | 175,977 | 157,827 | 28 | 10 s |
+| `Sponge_rate2` | Rate 2, exact XOR over bytes {0,1}, 1 domain, 3 ops, absorb 0..4, squeeze 0..3, all ops; + `Termination` | 3,086,213 | 2,863,557 | 113 | 8 min 49 s |
+| `Sponge_rate2_tagged` | Rate 2, distinct-symbol bytes, 1 domain, **5 ops**, absorb 0..3, squeeze 0..3 | 13,483,723 | 12,466,264 | 187 | 6 min 4 s |
+| `Sponge_rate3` | Rate 3, distinct symbols, 4 ops, absorb 0..6, squeeze 0..6 | 2,518,565 | 2,336,735 | 166 | 1 min 6 s |
+| `Sponge_rate8` | **Rate 8 (real)**, distinct symbols, 3 ops, absorb 0..17, squeeze {0,1,7,8,9,15,16,17}, `get` = 32 bytes | 711,266 | 660,124 | 185 | 17 s |
+| `Sponge_concurrent` | Rate 2, distinct symbols, **2 domains × 2 ops**, absorb 0..3, squeeze 0..3 | 16,682,872 | 8,559,096 | 151 | 3 min 38 s |
+| `Sponge_economy_get` | Rate 8, a single `get` (32 bytes); `HashGetMinimal` | 64 | 63 | 63 | < 1 s |
+| `Sponge_economy_squeeze` | Rate 8, `finish` and squeezes; `PermMinimal` | 128 | 121 | 38 | < 1 s |
+| `Sponge_eager` | eager code before the fix, Rate 2, 4 ops; `EagerExtraPermExact` | 499,342 | 462,487 | 154 | 8 s |
+| `Sponge_eager_rate8` | eager code before the fix, Rate 8, 3 ops, absorb 0..17; `EagerExtraPermExact` | 713,794 | 662,652 | 188 | 16 s |
+| `AeadDecrypt_tag2` | tag 2 B, word 2 B, ciphertexts 0..9 B, tags 0..3 B over {0,1,2}, combined 0..6 B, `equal` on all strings 0..3 B over {0..3}; + `Termination` | 175,977 | 157,827 | 28 | 9 s |
 | `AeadDecrypt_tag3` | tag 3 B, word 2 B, ciphertexts 0..9 B, tags {0,2,3,4} B over {0,1}, combined 0..7 B, `equal` 0..4 B over {0,1}; + `Termination` | 40,893 | 37,091 | 29 | 2 s |
 
-The Sponge pass configurations check `TypeOK BufferedRange OffsetRange
-BufferContents AbsorbRefinement SqueezeRefinement OutputCorrect
-SqueezeConcat ZeroSqueezeNoop AbsorbLoopInv SqueezeLoopInv Persistence
-NoWriteToPublished NoUserAliasing WritesOnlyFresh RaceFree
-AbsorbPermMinimal` plus `EagerExtraPermExact` (eager) or `PermMinimal
-OpPermMinimal HashGetMinimal` (lazy).  The AEAD configurations check every
-invariant of §2.2.
+The main Sponge configurations (`Lazy = TRUE`, the current code) check
+`TypeOK BufferedRange OffsetRange BufferContents AbsorbRefinement
+SqueezeRefinement OutputCorrect SqueezeConcat ZeroSqueezeNoop AbsorbLoopInv
+SqueezeLoopInv Persistence NoWriteToPublished NoUserAliasing WritesOnlyFresh
+RaceFree AbsorbPermMinimal PermMinimal OpPermMinimal HashGetMinimal`. The
+eager configurations check the same invariants, but with
+`EagerExtraPermExact` in place of the three minimality invariants. The AEAD
+configurations check every invariant of §2.2.
 
-**Expected failures** (`--expected-failures`; both reported exactly the
-documented violation, see finding F1):
+**Expected failures** (`--expected-failures`; they reproduce finding F1
+against the eager code from before the fix, and both reported exactly the
+documented violation):
 
 | Configuration | Invariant | TLC result |
 | --- | --- | --- |
-| `Sponge_economy_get` | `HashGetMinimal` | "Error: Invariant HashGetMinimal is violated." — 63-state trace, 63 states generated |
-| `Sponge_economy_squeeze` | `PermMinimal` | "Error: Invariant PermMinimal is violated." — 25-state trace, 126 generated / 121 distinct |
+| `Sponge_eager_economy_get` | `HashGetMinimal` | "Error: Invariant HashGetMinimal is violated." — 63-state trace |
+| `Sponge_eager_economy_squeeze` | `PermMinimal` | "Error: Invariant PermMinimal is violated." — 25-state trace |
 
 **Non-vacuity witnesses** (`--witnesses`): all 26 `NoW_*` predicates were
 refuted, i.e. every configuration really reaches the situations its
@@ -106,7 +111,7 @@ local statements are folded into the neighbouring label):
   `Xof128.absorb`, `Cxof128.absorb`;
 * `finish` — `Sponge.finish = squeezing_of_state (finish_state _)`
   (sponge.ml:42-53) = `Xof128/Cxof128.start_squeezing`;
-* `squeeze` — `Sponge.squeeze` (sponge.ml:55-77) = `Xof128/Cxof128.squeeze`;
+* `squeeze` — `Sponge.squeeze` (sponge.ml:55-80) = `Xof128/Cxof128.squeeze`;
 * `get` — `Hash256.get` (ascon.ml:187-189): `finish` then
   `squeeze digest_size`, discarding the squeezing context;
 * `reinit` — `Sponge.of_state (Sponge.finish_state _)`, the step of
@@ -209,12 +214,12 @@ other while it is itself mid-operation.
 | `sq_copy` | 58-59 `State.copy context.state`, `offset` | read published state, allocate |
 | `sq_create` | 60-61 `Bytes.create length`, `written := 0` | allocate (uninitialised) |
 | `sq_loop` | 62 `while !written < length` | — |
-| `sq_lazy_p12` | *lazy variant only* (`Lazy = TRUE`): `if !offset = 8 then (p12 state; offset := 0)` at the start of an iteration | write fresh state |
-| `sq_take` | 63 `take = min (8 - !offset) (length - !written)` | — |
-| `sq_for` | 64-70, one step per iteration: `Bytes.unsafe_set output (!written + i)` byte `!offset + i` of `x0` | read fresh state, write fresh output |
-| `sq_adv` | 71-73 `written +=`, `offset +=`, `if !offset = 8` (eager only) | — |
-| `sq_p12` | 74-75 `p12 state; offset := 0` (eager variant = the real code) | write fresh state |
-| `sq_ret` | 77 `({ state; offset }, output)`; `get` discards the context (ascon.ml:189 `snd`) | publish |
+| `sq_lazy_p12` | 66-68 `if !offset = 8 then (p12 state; offset := 0)` at the start of an iteration (`Lazy = TRUE`, the current code) | write fresh state |
+| `sq_take` | 69 `take = min (8 - !offset) (length - !written)` | — |
+| `sq_for` | 70-76, one step per iteration: `Bytes.unsafe_set output (!written + i)` byte `!offset + i` of `x0` | read fresh state, write fresh output |
+| `sq_adv` | 77-78 `written +=`, `offset +=` (the eager code before the fix also tested `if !offset = 8` here) | — |
+| `sq_p12` | eager variant only (`Lazy = FALSE`, the code before the fix): `p12 state; offset := 0` as soon as a block is used up | write fresh state |
+| `sq_ret` | 80 `({ state; offset }, output)`; `get` discards the context (ascon.ml:189 `snd`) | publish |
 
 ### 1.4 Abstract specification
 
@@ -244,11 +249,11 @@ listed, with no error.  The invariant names are those in `Sponge.tla`.
 | b | `OutputCorrect` | every `squeeze`/`get` output equals `SpecOut(fin, p) .. SpecOut(fin, p+L-1)`; no uninitialised byte is ever returned | holds |
 | b | `SqueezeConcat` | for outputs produced in one behaviour, `squeeze a` then `squeeze b` from the result = `squeeze (a+b)` | holds (and reached, see witnesses) |
 | b | `ZeroSqueezeNoop` | a zero-length squeeze returns no bytes, performs no permutation and returns a context equal by value to its input | holds |
-| b | `AbsorbLoopInv`, `SqueezeLoopInv` | loop invariants at `sponge.ml:32` and `:62`; the squeeze one also gives progress (`offset < Rate` at the loop head) | holds |
+| b | `AbsorbLoopInv`, `SqueezeLoopInv` | loop invariants at `sponge.ml:32` and `:62`; the squeeze one also gives progress (`offset < Rate` after the pending permutation) | holds |
 | — | `Termination` | every operation of every domain terminates (checked in `Sponge_rate2` and both AEAD configurations, under weak fairness) | holds |
 | c | `AbsorbPermMinimal` | an absorbing context has performed exactly `len(pre) + floor(len(m) / Rate)` permutations (one per absorbed block) | holds |
-| c | `EagerExtraPermExact` | a squeezing context at position `p` has performed exactly `NeedSq(p) + [p > 0 and p mod Rate = 0]` squeeze permutations, and every `get` performs exactly `1 + DigestBlocks` | **holds — i.e. one permutation more than necessary** |
-| c | `PermMinimal`, `OpPermMinimal`, `HashGetMinimal` | squeezing contexts / every `squeeze` call / every `get` perform only the minimum number of permutations | **VIOLATED by the real (eager) code** (finding F1); hold for the lazy variant |
+| c | `EagerExtraPermExact` | eager variant (the code before the fix): a squeezing context at position `p` has performed exactly `NeedSq(p) + [p > 0 and p mod Rate = 0]` squeeze permutations, and every `get` performs exactly `1 + DigestBlocks` | **holds for the eager variant — one permutation more than necessary** |
+| c | `PermMinimal`, `OpPermMinimal`, `HashGetMinimal` | squeezing contexts / every `squeeze` call / every `get` perform only the minimum number of permutations | hold for the current (lazy) code; **violated by the eager code before the fix** (finding F1) |
 | d | `Persistence` | the deep value of every context ever returned to the user never changes | holds |
 | d | `NoWriteToPublished` | no step writes an object reachable from a returned context | holds |
 | d | `NoUserAliasing` | no returned context references a user-owned `bytes` (inputs, returned outputs), and the library never writes one | holds |
@@ -269,7 +274,13 @@ them.
 
 **F1 — the eager squeeze performs one permutation more than SP 800-232
 needs whenever an output ends on a block boundary (performance only).**
-`Sponge.squeeze` permutes as soon as `offset` reaches 8 (sponge.ml:73-75),
+*Status: fixed.* `Sponge.squeeze` now permutes lazily (sponge.ml:66-68). The
+main configurations model the lazy code and check `PermMinimal`,
+`OpPermMinimal` and `HashGetMinimal`; the eager code is kept as
+`Sponge_eager*.cfg`, and `Sponge_eager_economy_*.cfg` reproduce the
+counterexamples below.  The description that follows is of the code before
+the fix.
+`Sponge.squeeze` permuted as soon as `offset` reached 8 (sponge.ml:73-75 before the fix),
 even when no further output is requested.  `EagerExtraPermExact` (holds)
 pins down exactly when: a squeezing context at a non-zero multiple of 8
 carries one prepaid permutation, and it is wasted if the context is never
@@ -280,7 +291,7 @@ squeezed again.  Consequences in the public API:
   1 + 3 can influence the digest: the state after the fourth squeeze
   permutation is discarded (`snd`, ascon.ml:189).  SP 800-232 and the
   reference implementation permute only *between* output blocks.
-  `Sponge_economy_get` (real rate 8, 32-byte digest) is the TLC
+  `Sponge_eager_economy_get` (real rate 8, 32-byte digest) is the TLC
   counterexample: `HashGetMinimal` is violated with `nperm = 5` at `sq_ret`;
   the fifth permutation is state 61 (`sq_p12` after `written = 32`), see
   below.  For a message shorter than 8 bytes this is 6 p12 calls (IV, final block,
@@ -289,23 +300,24 @@ squeezed again.  Consequences in the public API:
 * `Xof128.digest` / `Cxof128.digest` with `length` a multiple of 8, and every
   incremental `squeeze` whose end position is a multiple of 8, perform one
   permutation that is only useful if the caller squeezes again
-  (`Sponge_economy_squeeze`, `PermMinimal` violated after
+  (`Sponge_eager_economy_squeeze`, `PermMinimal` violated after
   `finish; squeeze 8`).
 * Outputs are *not* affected: `OutputCorrect`, `SqueezeRefinement` and
   `SqueezeConcat` hold for the eager code.
 
 The **lazy variant** (`Lazy = TRUE`: permute at the start of the next block;
-`offset = 8` means "block exhausted") refines the same output stream and
-satisfies `PermMinimal`, `OpPermMinimal` and `HashGetMinimal`
-(`Sponge_lazy`, `Sponge_lazy_rate8`).  Trade-off: with persistent contexts,
-if a context at a block boundary is continued in several branches, the lazy
-variant performs that permutation once per branch while the eager code
-performed it once; for linear (single-shot or chained) use the lazy variant
-is minimal.  If adopted, `SECURITY_REVIEW.md` ("records an offset from 0 to 7
-... permute after each complete output block") would need updating.
+`offset = 8` means "block exhausted"), which is now the code, refines the same
+output stream and satisfies `PermMinimal`, `OpPermMinimal` and
+`HashGetMinimal` in every main configuration, including `Sponge_economy_get`
+and `Sponge_economy_squeeze`.  Trade-off: with persistent contexts, if a
+context at a block boundary is continued in several branches, the lazy code
+performs that permutation once per branch while the eager code performed it
+once; for linear (single-shot or chained) use the lazy code is minimal.
+`SECURITY_REVIEW.md` describes the lazy behaviour.
 
-Counterexample for `HashGetMinimal` (`./run.sh --expected-failures`, abridged
-to the permutation-relevant states):
+Counterexample for `HashGetMinimal` against the eager code
+(`./run.sh --expected-failures`, abridged to the permutation-relevant
+states; line numbers are those of the code before the fix):
 
 ```
 State  action       offset  written  nperm      (TLC: "State n: <action that produced it>")
@@ -353,6 +365,18 @@ of objects that are not yet shared, so they are unnecessary for persistence;
 they are harmless.
 
 ### 1.7 Mutation testing
+
+The mutants in the table below were run against the eager code from before
+the fix for F1. Three more mutants target the lazy squeeze that is now the
+code. Each was checked with every invariant of the main configurations
+(`Lazy = TRUE`, Rate 2, 3 operations), and all three are caught:
+
+| Mutant | Caught by |
+| --- | --- |
+| L1: the pending permutation (`sq_lazy_p12`, sponge.ml:66-68) forgets `offset := 0` | `SqueezeLoopInv` (20-state trace) |
+| L2: the pending permutation never runs | `Termination`: the squeeze loop spins at a used-up block (20-state lasso) |
+| L3: `squeeze` permutes `context.state` in place (`State.copy` removed, sponge.ml:58) | `SqueezeRefinement` (18-state trace) |
+
 
 Each mutant is a patched copy of `Sponge.tla` (PlusCal edited, then
 re-translated) created and checked **outside the repository**.  Each mutant

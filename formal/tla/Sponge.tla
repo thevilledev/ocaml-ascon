@@ -31,7 +31,7 @@ CONSTANTS
     SqLens,        \* lengths requested from squeeze
     Alphabet,      \* byte values (naturals < 256) used when ~Tagged
     Tagged,        \* TRUE: each input byte is a fresh distinct symbol
-    Lazy,          \* TRUE: model the lazy-permutation squeeze variant
+    Lazy,          \* TRUE: the current lazy squeeze; FALSE: the eager code before the fix
     DigestBlocks,  \* Hash256.get squeezes DigestBlocks*Rate bytes (real: 4)
     OpKinds,       \* subset of {"absorb","finish","squeeze","get","reinit"}
     MaxPerms       \* only for the PermBound state constraint (mutation runs)
@@ -81,7 +81,7 @@ Blit(src, so, dst, do, n) ==
     [j \in 1..Len(dst) |-> IF j > do /\ j <= do + n THEN src[so + (j - do)]
                                                     ELSE dst[j]]
 
-(* Symbolic Ascon-p[12] and the byte extraction of squeeze (sponge.ml:65-69) *)
+(* Symbolic Ascon-p[12] and the byte extraction of squeeze (sponge.ml:71-75) *)
 P12(s) == [perms |-> Append(s.perms, s.acc), acc |-> ZeroMask]
 X0Byte(s, j) == Xor({<<"P", s.perms, j>>}, s.acc[j + 1])
 
@@ -332,7 +332,7 @@ os_make:          \* sponge.ml:7    Bytes.make 8 '\000'; buffered = 0; return
     opsDone := opsDone + 1;
     goto pick;
 
-\* ---------------- Sponge.squeeze (sponge.ml:55-77) ----------------
+\* ---------------- Sponge.squeeze (sponge.ml:55-80) ----------------
 sq_copy:          \* sponge.ml:58-59 State.copy context.state; offset
     Alloc(st, "st", heap[cSq.st]);
     offset := cSq.off;
@@ -342,31 +342,31 @@ sq_create:        \* sponge.ml:60-61 Bytes.create length; written := 0
 sq_loop:          \* sponge.ml:62   while !written < length
     while (written < len) {
         if (Lazy /\ offset = Rate) {
-sq_lazy_p12:      \* LAZY VARIANT ONLY: permute when a new block is needed
+sq_lazy_p12:      \* sponge.ml:66-68 (current code): permute only when a new block is needed
             Write(st, P12(heap[st]));
             nperm := nperm + 1;
             offset := 0;
         };
-sq_take:          \* sponge.ml:63
+sq_take:          \* sponge.ml:69
         take := Min(Rate - offset, len - written);
         i := 0;
-sq_for:           \* sponge.ml:64-70 one step per iteration: output[w+i] := x0 byte
+sq_for:           \* sponge.ml:70-76 one step per iteration: output[w+i] := x0 byte
         while (i < take) {
             Write(outObj, [heap[outObj] EXCEPT ![written + i + 1] =
                                X0Byte(heap[st], offset + i)]);
             i := i + 1;
         };
-sq_adv:           \* sponge.ml:71-73
+sq_adv:           \* sponge.ml:77-78
         written := written + take;
         offset := offset + take;
         if (~Lazy /\ offset = Rate) {
-sq_p12:           \* sponge.ml:74-75 (eager: permute as soon as a block is used up)
+sq_p12:           \* EAGER VARIANT ONLY (code before the fix): permute as soon as a block is used up
             Write(st, P12(heap[st]));
             nperm := nperm + 1;
             offset := 0;
         };
     };
-sq_ret:           \* sponge.ml:77   ({ state; offset }, output)
+sq_ret:           \* sponge.ml:80   ({ state; offset }, output)
     with (c = [k |-> "sq", st |-> st, off |-> offset]) {
         outs := outs \cup {[kind |-> kind, fin |-> fin, pos |-> gpos, len |-> len,
                             out |-> heap[outObj], nperm |-> nperm,

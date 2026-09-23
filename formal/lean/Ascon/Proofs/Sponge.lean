@@ -16,7 +16,7 @@ import Ascon.Proofs.Parse
   output stream through `SqRep`. `squeeze` of `L` bytes returns stream bytes
   `p … p+L-1` and a context for position `p + L`.
 
-The contexts' invariants `0 ≤ buffered < 8` and `0 ≤ offset < 8` are part of
+The contexts' invariants `0 ≤ buffered < 8` and `0 ≤ offset ≤ 8` are part of
 `AbsRep` and `SqRep`.
 -/
 
@@ -411,10 +411,16 @@ open Spec.Hash (blockState streamByte outBytes)
 open Permutation
 namespace Sponge
 
+/-- State `st` and offset `off` stand for position `q` of the output stream from
+`S`. Either `off = q mod 8` and `q / 8` permutations have been applied, or the
+current block is used up (`off = 8`, `q` a positive multiple of 8) and the
+permutation for the next block is still pending. -/
+def AtPos (S : Spec.State) (q : Nat) (st : State) (off : Int) : Prop :=
+  (off = ((q % 8 : Nat) : Int) ∧ st.toSpec = blockState S (q / 8)) ∨
+  (off = 8 ∧ 8 ≤ q ∧ q % 8 = 0 ∧ st.toSpec = blockState S (q / 8 - 1))
+
 /-- A squeezing context stands for position `p` of the output stream from `S`. -/
-structure SqRep (S : Spec.State) (p : Nat) (ctx : Squeezing) : Prop where
-  state : ctx.state.toSpec = blockState S (p / 8)
-  offset : ctx.offset = ((p % 8 : Nat) : Int)
+def SqRep (S : Spec.State) (p : Nat) (ctx : Squeezing) : Prop := AtPos S p ctx.state ctx.offset
 
 theorem Bytes.create_ok (n : Nat) (h : (n : Int) ≤ maxStringLength) :
     Bytes.create n = .ok (List.replicate n none) := by
@@ -470,70 +476,75 @@ theorem squeezeInner_ok (S : Spec.State) (p w L t : Nat) (st : State)
       rw [ho, show k = t by omega]⟩
   rw [hout, hP.2, show i = t by omega]
 
+/-- The permutation deferred at a used-up block boundary, if any: afterwards the
+state is in the first form of `AtPos`. -/
+theorem pending_ok (S : Spec.State) (q : Nat) (st : State) (off : Int) (h : AtPos S q st off) :
+    ∃ st0, pendingPermutation st off = .ok (st0, ((q % 8 : Nat) : Int)) ∧
+      st0.toSpec = blockState S (q / 8) := by
+  unfold pendingPermutation
+  rcases h with ⟨hoff, hst⟩ | ⟨hoff, h8, hmod, hst⟩
+  · refine ⟨st, ?_, hst⟩
+    rw [ite_eq_right (by omega), hoff]; rfl
+  · refine ⟨State.ofSpec (Spec.asconP 12 st.toSpec), ?_, ?_⟩
+    · rw [ite_eq_left hoff, bind_of_ok (p12_correct st), hmod]; rfl
+    · rw [State.toSpec_ofSpec, hst, ← Spec.Hash.blockState_succ,
+        show q / 8 - 1 + 1 = q / 8 by omega]
+
 /-- The `while` loop of `squeeze`: it terminates within its budget and emits
 stream bytes `p + w … p + L - 1`. -/
 theorem squeezeLoop_ok (S : Spec.State) (p L : Nat) :
-    ∀ (fuel w : Nat) (st : State), w ≤ L → L - w < fuel →
-      st.toSpec = blockState S ((p + w) / 8) →
-      squeezeLoop fuel st (((p + w) % 8 : Nat) : Int)
+    ∀ (fuel w : Nat) (st : State) (off : Int), w ≤ L → L - w < fuel →
+      AtPos S (p + w) st off →
+      ∃ st' off', squeezeLoop fuel st off
           (Bytes.ofList (outBytes S p w) ++ List.replicate (L - w) none) w L =
-        .ok (State.ofSpec (blockState S ((p + L) / 8)), (((p + L) % 8 : Nat) : Int),
-          Bytes.ofList (outBytes S p L), (L : Int)) := by
+        .ok (st', off', Bytes.ofList (outBytes S p L), (L : Int)) ∧
+        AtPos S (p + L) st' off' := by
   intro fuel
   induction fuel with
-  | zero => intro w st _ h; omega
+  | zero => intro w st off _ h; omega
   | succ fuel ih =>
-    intro w st hw hf hst
+    intro w st off hw hf hpos
     rw [squeezeLoop]
     by_cases hlt : w < L
     · rw [ite_eq_left (by omega : (w : Int) < L)]
+      obtain ⟨st0, hst0, hs0⟩ := pending_ok S (p + w) st off hpos
+      rw [bind_of_ok hst0]
+      simp only []
       have ht : min (8 - (((p + w) % 8 : Nat) : Int)) ((L : Int) - (w : Int)) =
           ((min (8 - (p + w) % 8) (L - w) : Nat) : Int) := by omega
       generalize htk : min (8 - (p + w) % 8) (L - w) = t at ht
       have htpos : 0 < t := by omega
-      simp only [ht, squeezeInner_ok S p w L t st hst (by omega) (by omega), bind,
-        Except.bind]
-      by_cases h8 : (p + w) % 8 + t = 8
-      · rw [ite_eq_left (by omega : (((p + w) % 8 : Nat) : Int) + (t : Int) = 8)]
-        simp only [p12_correct, pure, Except.pure]
-        have := ih (w + t) (State.ofSpec (Spec.asconP 12 st.toSpec)) (by omega) (by omega)
-          (by rw [State.toSpec_ofSpec, hst, show (p + (w + t)) / 8 = (p + w) / 8 + 1 by omega,
-                Spec.Hash.blockState_succ])
-        rw [show (((p + (w + t)) % 8 : Nat) : Int) = 0 by omega,
-          show ((w + t : Nat) : Int) = (w : Int) + (t : Int) by push_cast; rfl] at this
-        exact this
-      · rw [ite_eq_right (by omega : ¬ ((((p + w) % 8 : Nat) : Int) + (t : Int) = 8))]
-        simp only [pure, Except.pure]
-        have := ih (w + t) st (by omega) (by omega)
-          (by rw [hst, show (p + (w + t)) / 8 = (p + w) / 8 by omega])
-        rw [show (((p + (w + t)) % 8 : Nat) : Int) = (((p + w) % 8 : Nat) : Int) + (t : Int) by
-            omega,
-          show ((w + t : Nat) : Int) = (w : Int) + (t : Int) by push_cast; rfl] at this
-        exact this
+      rw [ht, bind_of_ok (squeezeInner_ok S p w L t st0 hs0 (by omega) (by omega))]
+      have hnext : AtPos S (p + (w + t)) st0 ((((p + w) % 8 : Nat) : Int) + (t : Int)) := by
+        by_cases h8 : (p + w) % 8 + t = 8
+        · right
+          refine ⟨by omega, by omega, by omega, ?_⟩
+          rw [hs0, show (p + (w + t)) / 8 - 1 = (p + w) / 8 by omega]
+        · left
+          exact ⟨by omega, by rw [hs0, show (p + (w + t)) / 8 = (p + w) / 8 by omega]⟩
+      obtain ⟨st', off', hrec, hpos'⟩ := ih (w + t) st0 _ (by omega) (by omega) hnext
+      rw [show ((w + t : Nat) : Int) = (w : Int) + (t : Int) by push_cast; rfl] at hrec
+      exact ⟨st', off', hrec, hpos'⟩
     · have hwL : w = L := by omega
       subst hwL
       rw [ite_eq_right (by omega)]
-      simp only [Nat.sub_self, List.replicate_zero, List.append_nil, ← hst,
-        State.ofSpec_toSpec]
+      refine ⟨st, off, ?_, hpos⟩
+      simp only [Nat.sub_self, List.replicate_zero, List.append_nil]
       rfl
 
 /-- `squeeze` returns the next `L` stream bytes and advances the position by `L`. -/
 theorem squeeze_correct (S : Spec.State) (p : Nat) (ctx : Squeezing) (h : SqRep S p ctx)
     (L : Nat) (hL : (L : Int) ≤ maxStringLength) :
-    squeeze ctx L =
-      .ok (⟨State.ofSpec (blockState S ((p + L) / 8)), (((p + L) % 8 : Nat) : Int)⟩,
-        Bytes.ofList (outBytes S p L)) ∧
-    SqRep S (p + L) ⟨State.ofSpec (blockState S ((p + L) / 8)), (((p + L) % 8 : Nat) : Int)⟩ := by
-  obtain ⟨hst, hoff⟩ := h
-  refine ⟨?_, ⟨by simp, rfl⟩⟩
-  have hloop := squeezeLoop_ok S p L (L + 1) 0 ctx.state (Nat.zero_le _) (by omega)
-    (by rw [hst, Nat.add_zero])
-  simp only [Nat.add_zero, Nat.sub_zero, show outBytes S p 0 = [] from rfl,
+    ∃ ctx', squeeze ctx L = .ok (ctx', Bytes.ofList (outBytes S p L)) ∧
+      SqRep S (p + L) ctx' := by
+  obtain ⟨st', off', hloop, hpos⟩ := squeezeLoop_ok S p L (L + 1) 0 ctx.state ctx.offset
+    (Nat.zero_le _) (by omega) (by simpa [SqRep] using h)
+  simp only [Nat.sub_zero, show outBytes S p 0 = [] from rfl,
     Bytes.ofList, List.map_nil, List.nil_append, natCast_zero_int] at hloop
+  refine ⟨⟨st', off'⟩, ?_, hpos⟩
   unfold squeeze
   rw [ite_eq_right (by omega)]
-  simp only [State.copy_eq, hoff, Bytes.create_ok L hL, bind, Except.bind,
-    Int.toNat_natCast]
+  simp only [State.copy_eq, Bytes.create_ok L hL, bind, Except.bind, Int.toNat_natCast]
   rw [hloop]
   rfl
 

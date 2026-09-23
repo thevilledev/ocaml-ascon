@@ -26,7 +26,7 @@ All are in namespace `Ascon.Model` unless marked `Spec`.
 | `ConstantTime.equal_ok` | `equal a b = .ok (decide (a = b))`. |
 | `Sponge.absorb_correct` | If a context stands for message `m`, then `absorb` on `x` succeeds and gives a context that stands for `m ++ x`. Buffer and `0 ≤ buffered < 8` invariants included. |
 | `Sponge.finishState_correct` | Finalization absorbs `pad(final block)`. |
-| `Sponge.squeeze_correct` | `squeeze` returns the next `L` bytes of the output stream, advances the position by `L`, and initializes every output byte. The squeeze loop terminates. |
+| `Sponge.squeeze_correct` | `squeeze` returns the next `L` bytes of the output stream, advances the position by `L`, and initializes every output byte. The squeeze loop terminates. A context at a used-up block boundary may defer its permutation (`offset = 8`; see `AtPos`). |
 | `Hash256.digest_correct`, `Hash256.incremental_correct` | `digest M` is Ascon-Hash256(M), and `init`, then `feed` on any chunks, then `get` gives the hash of their concatenation. |
 | `Xof128.digest_correct`, `Xof128.streaming_correct`, `Xof128.squeeze_invalid` | One-shot XOF for every valid length, else `Invalid_length`. Any absorb chunking followed by any sequence of squeeze lengths yields the one-shot output of the total length. |
 | `Cxof128.digest_correct`, `Cxof128.init_correct`, `Cxof128.init_too_long` | Ascon-CXOF128, including `Z₀` and the 256-byte limit. |
