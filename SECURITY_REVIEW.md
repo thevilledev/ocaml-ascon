@@ -63,9 +63,10 @@ item should be rechecked by a human reviewer before v0.1.0.
   distinct. Once converted, a value cannot be passed to `absorb`.
 - **Chunking:** persistent contexts keep up to seven pending bytes. Filling a
   block from multiple feeds is equivalent to a one-shot full block.
-- **Partial squeeze blocks:** a squeezing state records an offset from 0 to 7;
-  repeated calls continue at the next byte and permute after each complete
-  output block.
+- **Partial squeeze blocks:** a squeezing state records an offset from 0 to 8,
+  where 8 means the current block is used up; repeated calls continue at the
+  next byte and permute only when a further output byte is requested, so no
+  permutation is spent after the last byte returned.
 - **Length handling:** one-shot XOF/CXOF lengths must be positive; negative and
   unrepresentable requested byte lengths return typed errors before allocation.
   A zero-length incremental squeeze is a documented no-op. Combined AEAD

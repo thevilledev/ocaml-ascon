@@ -60,6 +60,12 @@ let squeeze (context : squeezing) length =
   let output = Bytes.create length in
   let written = ref 0 in
   while !written < length do
+    (* An offset of 8 means the current block is used up. Permute only when
+       another output byte is needed, as SP 800-232 permutes only between
+       output blocks. *)
+    if !offset = 8 then (
+      Permutation.p12 state;
+      offset := 0);
     let take = min (8 - !offset) (length - !written) in
     for i = 0 to take - 1 do
       let shift = 8 * (!offset + i) in
@@ -69,9 +75,6 @@ let squeeze (context : squeezing) length =
               (Int64.logand (Int64.shift_right_logical state.x0 shift) 0xffL)))
     done;
     written := !written + take;
-    offset := !offset + take;
-    if !offset = 8 then (
-      Permutation.p12 state;
-      offset := 0)
+    offset := !offset + take
   done;
   ({ state; offset = !offset }, output)
