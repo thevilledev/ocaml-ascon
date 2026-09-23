@@ -53,27 +53,28 @@ library is proved never to fire on a public-API path.
    `p12` calls where 4 are needed, so a short-message hash runs 6
    permutations instead of 5. Outputs are unaffected. TLC found it
    (`Sponge_economy_get`, `Sponge_economy_squeeze`; see
-   [`tla/README.md`](tla/README.md#16-findings), F1). *Fixed in branch
-   `claude/fix-lazy-squeeze-permutation`,* which also updates the Lean and TLA+
+   [`tla/README.md`](tla/README.md#16-findings), F1). *Fixed in a follow-up
+   pull request stacked on this one,* which also updates the Lean and TLA+
    models to the new code.
 2. **Undocumented exception: `Aead128.encrypt_combined` raises
    `Invalid_argument`** when `Bytes.length plaintext > Sys.max_string_length -
    16`. The Lean theorem `encryptCombined_correct` states the exact
    condition. The limit is unreachable on 64-bit runtimes, but on a 32-bit
    runtime it is a plaintext of about 16 MiB. `ascon.mli` does not mention
-   the exception. *Documented in branch `claude/docs-api-contract-clarifications`.*
+   the exception. *Documented in
+   [#3](https://github.com/thevilledev/ocaml-ascon/pull/3).*
 3. **Documentation: "immutable" contexts.** `ascon.mli` calls the hash and
    XOF contexts *immutable*. TLC proves them *persistent*, meaning no returned
    context is ever changed. Internally, however, each one is built by
    mutating freshly allocated objects, so under the OCaml 5 memory model it
    must be handed to another domain through synchronization and not a data
    race ([`tla/README.md`](tla/README.md#16-findings), F3). *Clarified in
-   branch `claude/docs-api-contract-clarifications`.*
+   [#4](https://github.com/thevilledev/ocaml-ascon/pull/4).*
 4. **Test tooling: the differential harness does not cover every rate
    boundary.** `tools/differential/run.py` is meant to exercise the boundary
    lengths first, but it samples them at random, so a typical run misses
-   about a third of them. It also never exercises decryption. *Fixed in branch
-   `claude/fix-differential-harness-coverage`.*
+   about a third of them. It also never exercises decryption. *Fixed in
+   [#5](https://github.com/thevilledev/ocaml-ascon/pull/5).*
 
 TLC also observed that `finish` and `Hash256.get` copy the state more often
 than needed (tla F4). This only costs allocations and is left as is.
