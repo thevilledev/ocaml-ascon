@@ -285,7 +285,31 @@ let test_xof_streaming () =
   let _, first = squeeze_ok state 8 in
   let _, after_empty = squeeze_ok state_after 8 in
   check (Bytes.length empty = 0) "XOF permits a zero-byte incremental squeeze";
-  check_bytes "zero-byte XOF squeeze preserves state" first after_empty
+  check_bytes "zero-byte XOF squeeze preserves state" first after_empty;
+  (* The permutation for the next block is deferred until more output is
+     requested, so a context that ends on a block boundary must stay usable
+     from several branches without being changed. *)
+  let message = patterned 24 53 in
+  let expected =
+    get_ok "one-shot XOF" (Ascon.Xof128.digest message ~length:40)
+  in
+  let start =
+    Ascon.Xof128.start_squeezing
+      (Ascon.Xof128.absorb (Ascon.Xof128.init ()) message)
+  in
+  let boundary, block0 = squeeze_ok start 8 in
+  let _, zero = squeeze_ok boundary 0 in
+  let _, branch_a = squeeze_ok boundary 8 in
+  let boundary_b, branch_b = squeeze_ok boundary 16 in
+  let _, after_b = squeeze_ok boundary_b 16 in
+  let _, branch_c = squeeze_ok boundary 32 in
+  check (Bytes.length zero = 0) "zero-byte squeeze at a block boundary";
+  check_bytes "first block" (Bytes.sub expected 0 8) block0;
+  check_bytes "boundary branch a" (Bytes.sub expected 8 8) branch_a;
+  check_bytes "boundary branch b" (Bytes.sub expected 8 16) branch_b;
+  check_bytes "continuation after boundary branch b" (Bytes.sub expected 24 16)
+    after_b;
+  check_bytes "boundary branch c" (Bytes.sub expected 8 32) branch_c
 
 let cxof_squeeze_ok state length =
   get_ok "CXOF squeeze" (Ascon.Cxof128.squeeze state ~length)

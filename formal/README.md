@@ -17,8 +17,9 @@ This directory contains a machine-checked verification of the library in
   executed, and the AEAD rule that plaintext is released only after tag
   verification.
 
-The OCaml sources are unchanged by this work. The findings and their fixes
-are listed [below](#findings).
+The findings and their fixes are listed [below](#findings).
+`lib/internal/sponge.ml` includes the fix for finding 1, and both the Lean
+proofs and the TLA+ models describe the fixed code.
 
 ## Results at a glance
 
@@ -39,7 +40,7 @@ are listed [below](#findings).
 | No data races between two OCaml 5 domains sharing contexts | TLC `RaceFree` (2 domains × 2 operations) | holds |
 | Plaintext only released after full-tag verification; rejected buffer zero-filled | TLC `AeadDecrypt` properties | holds |
 | `Constant_time.equal` always runs `len` iterations | TLC `AeadDecrypt` | holds |
-| No more permutations than SP 800-232 requires | TLC `PermMinimal`, `HashGetMinimal` | **violated** (finding 1) |
+| No more permutations than SP 800-232 requires | TLC `PermMinimal`, `OpPermMinimal`, `HashGetMinimal` | holds (violated before the fix for finding 1) |
 
 **No functional correctness bug was found.** For every input, the four
 algorithms return the standardized outputs, and every guard inside the
@@ -47,15 +48,17 @@ library is proved never to fire on a public-API path.
 
 ## Findings
 
-1. **Performance: `Sponge.squeeze` performs one permutation that SP 800-232
-   does not need** whenever an output ends on an 8-byte block boundary
-   (`sponge.ml:73-75`). Every `Hash256.get`/`digest` pays it: 5 squeeze-side
-   `p12` calls where 4 are needed, so a short-message hash runs 6
-   permutations instead of 5. Outputs are unaffected. TLC found it
-   (`Sponge_economy_get`, `Sponge_economy_squeeze`; see
-   [`tla/README.md`](tla/README.md#16-findings), F1). *Fixed in a follow-up
-   pull request stacked on this one,* which also updates the Lean and TLA+
-   models to the new code.
+1. **Performance: `Sponge.squeeze` performed one permutation that SP 800-232
+   does not need** whenever an output ended on an 8-byte block boundary.
+   Every `Hash256.get`/`digest` paid it: 5 squeeze-side `p12` calls where 4
+   are needed, so a short-message hash ran 6 permutations instead of 5.
+   Outputs were unaffected. TLC found it (`Sponge_eager_economy_get`,
+   `Sponge_eager_economy_squeeze`; see
+   [`tla/README.md`](tla/README.md#16-findings), F1). *Fixed:* `squeeze`
+   now permutes only when another output byte is needed. The Lean
+   proofs (`Sponge.squeeze_correct` with the two-form `AtPos` invariant) and
+   the TLA+ minimality properties hold for the new code. An empty-message
+   Hash256 is about 16% faster and allocates 20% less.
 2. **Undocumented exception: `Aead128.encrypt_combined` raises
    `Invalid_argument`** when `Bytes.length plaintext > Sys.max_string_length -
    16`. The Lean theorem `encryptCombined_correct` states the exact

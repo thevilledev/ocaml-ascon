@@ -50,7 +50,7 @@ theorem outBytes_add (S : Spec.State) (p a b : Nat) :
 theorem finish_rep (S0 : Spec.State) (m : List Byte) (ctx : Sponge.Absorbing)
     (h : AbsRep S0 m ctx) :
     ∃ sq, Sponge.finish ctx = .ok sq ∧ SqRep (Spec.Hash.absorb S0 (Spec.paddedBlocks 8 m)) 0 sq :=
-  ⟨_, Sponge.finish_correct S0 m ctx h, ⟨by simp [blockState], rfl⟩⟩
+  ⟨_, Sponge.finish_correct S0 m ctx h, .inl ⟨rfl, by simp [blockState]⟩⟩
 
 namespace Hash256
 
@@ -60,7 +60,7 @@ theorem get_correct (m : List Byte) (ctx : Sponge.Absorbing)
     (h : AbsRep (Spec.Hash.initial Spec.Hash.hashIV) m ctx) :
     get ctx = .ok (Bytes.ofList (Spec.Hash.hash256 m)) := by
   obtain ⟨sq, hsq, hrep⟩ := finish_rep _ m ctx h
-  have := (Sponge.squeeze_correct _ 0 sq hrep 32 (by decide)).1
+  obtain ⟨_, this, _⟩ := Sponge.squeeze_correct _ 0 sq hrep 32 (by decide)
   simp only [get, hsq, bind, Except.bind, digestSize]
   rw [show (32 : Int) = ((32 : Nat) : Int) from rfl, this]
   simp only [pure, Except.pure, outBytes_zero_eq_squeeze, Spec.Hash.hash256]
@@ -102,7 +102,7 @@ theorem digest_correct (M : List Byte) (L : Int) :
   · obtain ⟨ctx0, h0, hr0⟩ := init_rep
     obtain ⟨ctx1, h1, hr1⟩ := Sponge.absorb_correct _ [] M ctx0 hr0
     obtain ⟨sq, hsq, hrep⟩ := finish_rep _ _ ctx1 hr1
-    have hsqz := (Sponge.squeeze_correct _ 0 sq hrep L.toNat (by omega)).1
+    obtain ⟨_, hsqz, _⟩ := Sponge.squeeze_correct _ 0 sq hrep L.toNat (by omega)
     rw [show ((L.toNat : Nat) : Int) = L by omega] at hsqz
     have hv : validDigestLength L = true := by simp [validDigestLength]; omega
     simp only [digest, hv, Bool.not_true, Bool.false_eq_true, ↓reduceIte, absorb,
@@ -115,8 +115,8 @@ theorem digest_correct (M : List Byte) (L : Int) :
 theorem squeeze_correct (S : Spec.State) (p : Nat) (sq : Sponge.Squeezing) (h : SqRep S p sq)
     (L : Nat) (hL : (L : Int) ≤ maxStringLength) :
     ∃ sq', squeeze sq L = .ok (.ok (sq', Bytes.ofList (outBytes S p L))) ∧ SqRep S (p + L) sq' := by
-  obtain ⟨hs, hr⟩ := Sponge.squeeze_correct S p sq h L hL
-  refine ⟨_, ?_, hr⟩
+  obtain ⟨sq', hs, hr⟩ := Sponge.squeeze_correct S p sq h L hL
+  refine ⟨sq', ?_, hr⟩
   have hv : validLength L = true := by simp [validLength]; omega
   simp only [squeeze, hv, ↓reduceIte, hs, bind, Except.bind, pure, Except.pure]
 
@@ -232,7 +232,7 @@ theorem digest_correct (Z M : List Byte) (L : Int) :
     · obtain ⟨c, hc, hr⟩ := init_correct Z hZ
       obtain ⟨c1, h1, hr1⟩ := Sponge.absorb_correct _ [] M c hr
       obtain ⟨sq, hsq, hrep⟩ := finish_rep _ _ c1 hr1
-      have hsqz := (Sponge.squeeze_correct _ 0 sq hrep L.toNat (by omega)).1
+      obtain ⟨_, hsqz, _⟩ := Sponge.squeeze_correct _ 0 sq hrep L.toNat (by omega)
       rw [show ((L.toNat : Nat) : Int) = L by omega] at hsqz
       simp only [digest, hv, Bool.not_true, Bool.false_eq_true, ↓reduceIte, hc, absorb,
         startSqueezing, h1, hsq, hsqz, bind, Except.bind, pure, Except.pure, ite_eq_left hL,

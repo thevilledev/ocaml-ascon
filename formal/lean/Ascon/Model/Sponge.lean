@@ -103,6 +103,11 @@ def squeezeByte (x0 : Word) (offset written : Int) (i : Int) (output : Bytes) : 
   Bytes.unsafeSet output (written + i)
     (← Char.chr (Int64.toInt ((← Int64.shiftRightLogical x0 shift) &&& 0xff)))
 
+/-- `if !offset = 8 then (Permutation.p12 state; offset := 0)` at the top of
+the `squeeze` loop: the deferred permutation of a used-up block. -/
+def pendingPermutation (state : State) (offset : Int) : M (State × Int) :=
+  if offset = 8 then do pure ((← p12 state), (0 : Int)) else pure (state, offset)
+
 /-- `while !written < length do … done`, with an iteration budget. -/
 def squeezeLoop (fuel : Nat) (state : State) (offset : Int) (output : Bytes) (written length : Int) :
     M (State × Int × Bytes × Int) :=
@@ -110,12 +115,11 @@ def squeezeLoop (fuel : Nat) (state : State) (offset : Int) (output : Bytes) (wr
   | 0 => if written < length then throw .loopBound else pure (state, offset, output, written)
   | fuel + 1 =>
     if written < length then do
+      let (state, offset) ← pendingPermutation state offset
       let take := min (8 - offset) (length - written)
       let output ← forUp 0 (take - 1) output (squeezeByte state.x0 offset written)
       let written := written + take
       let offset := offset + take
-      let (state, offset) ← if offset = 8 then do pure ((← p12 state), (0 : Int))
-        else pure (state, offset)
       squeezeLoop fuel state offset output written length
     else pure (state, offset, output, written)
 

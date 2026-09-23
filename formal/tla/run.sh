@@ -38,16 +38,18 @@ Sponge:Sponge_rate2_tagged
 Sponge:Sponge_rate3
 Sponge:Sponge_rate8
 Sponge:Sponge_concurrent
-Sponge:Sponge_lazy
-Sponge:Sponge_lazy_rate8
+Sponge:Sponge_economy_get
+Sponge:Sponge_economy_squeeze
+Sponge:Sponge_eager
+Sponge:Sponge_eager_rate8
 AeadDecrypt:AeadDecrypt_tag2
 AeadDecrypt:AeadDecrypt_tag3
 "
 # module:config:invariant for configurations that must FAIL with exactly
 # that invariant violated (documented findings, see README.md).
 EXPECTED_FAILURES="
-Sponge:Sponge_economy_get:HashGetMinimal
-Sponge:Sponge_economy_squeeze:PermMinimal
+Sponge:Sponge_eager_economy_get:HashGetMinimal
+Sponge:Sponge_eager_economy_squeeze:PermMinimal
 "
 # module:base-config:witness -- witness must be violated (situation reached)
 WITNESSES="
@@ -57,11 +59,11 @@ Sponge:Sponge_rate8:NoW_FillBlockTail
 Sponge:Sponge_rate2:NoW_FullPaddingBlock
 Sponge:Sponge_rate8:NoW_FullPaddingBlock
 Sponge:Sponge_rate2:NoW_SqueezeAtBoundary
-Sponge:Sponge_lazy:NoW_SqueezeAtBoundary
+Sponge:Sponge_eager:NoW_SqueezeAtBoundary
 Sponge:Sponge_rate2:NoW_SqueezeCrossing
 Sponge:Sponge_rate8:NoW_SqueezeCrossing
 Sponge:Sponge_rate2_tagged:NoW_Concat
-Sponge:Sponge_lazy:NoW_Concat
+Sponge:Sponge_eager:NoW_Concat
 Sponge:Sponge_rate2:NoW_ZeroSqueeze
 Sponge:Sponge_rate2:NoW_AbsorbAfterReinit
 Sponge:Sponge_rate2:NoW_Branching
