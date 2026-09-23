@@ -1,0 +1,17 @@
+name = "ascon-formal"
+version = "0.1.0"
+defaultTargets = ["Ascon", "kat", "spec-driver"]
+
+[[lean_lib]]
+name = "Ascon"
+
+[[lean_lib]]
+name = "Tools"
+
+[[lean_exe]]
+name = "kat"
+root = "Kat"
+
+[[lean_exe]]
+name = "spec-driver"
+root = "SpecDriver"
