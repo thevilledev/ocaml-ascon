@@ -12,5 +12,8 @@ python3 tools/differential/run.py /path/to/ascon-c --cases 100
 ```
 
 The harness covers random keys, nonces, associated data, messages,
-customizations, and XOF output lengths. Its PRNG seed is fixed so failures are
+customizations, and XOF output lengths. The first cases enumerate every
+rate-boundary length of the message and the associated data. For every AEAD
+case the OCaml library must also decrypt the reference ciphertext and reject a
+copy with one bit changed. Its PRNG seed is fixed so failures are
 reproducible. The C checkout is not downloaded automatically.
