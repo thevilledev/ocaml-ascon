@@ -2,7 +2,14 @@
 
     This library implements the final standardized, little-endian algorithms. It
     is not compatible with Ascon v1.2. All message-oriented inputs and outputs
-    are byte strings; arbitrary bit-length inputs are not supported. *)
+    are byte strings; arbitrary bit-length inputs are not supported.
+
+    Hash and XOF contexts are persistent: every operation returns a new context
+    and never modifies its argument, so a context can be reused or branched.
+    They are built from mutable internal buffers, so under OCaml 5 a context
+    must reach another domain through synchronization (for example
+    [Domain.spawn], [Domain.join], [Mutex] or [Atomic]), not through a data
+    race. *)
 
 (** Authenticated encryption with Ascon-AEAD128. *)
 module Aead128 : sig
@@ -75,7 +82,7 @@ end
 (** The fixed-output Ascon-Hash256 hash function. *)
 module Hash256 : sig
   type ctx
-  (** An immutable incremental hashing context. *)
+  (** A persistent incremental hashing context. *)
 
   val digest_size : int
   (** Digest length in bytes. *)
@@ -102,10 +109,10 @@ end
 (** The Ascon-XOF128 extendable-output function. *)
 module Xof128 : sig
   type absorbing
-  (** An immutable state that accepts more message bytes. *)
+  (** A persistent state that accepts more message bytes. *)
 
   type squeezing
-  (** An immutable state that can only produce output. *)
+  (** A persistent state that can only produce output. *)
 
   type length_error = [ `Invalid_length ]
   (** Error returned when a requested byte length is invalid. *)
@@ -132,10 +139,10 @@ end
 (** The customized Ascon-CXOF128 extendable-output function. *)
 module Cxof128 : sig
   type absorbing
-  (** An immutable state that accepts message bytes. *)
+  (** A persistent state that accepts message bytes. *)
 
   type squeezing
-  (** An immutable state that can only produce output. *)
+  (** A persistent state that can only produce output. *)
 
   type error = [ `Customization_too_long | `Invalid_length ]
   (** Errors for customization strings over 256 bytes or invalid output lengths. *)

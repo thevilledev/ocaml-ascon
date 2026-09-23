@@ -65,7 +65,7 @@
 (* [digest] is exactly Ascon.Hash256.digest_size = 32 bytes. *)</code></pre>
 
       <p>
-        Incremental contexts are immutable. <code>feed</code> returns a new
+        Incremental contexts are persistent. <code>feed</code> returns a new
         context rather than mutating the old one, and <code>get</code> reads a
         digest without consuming the context it was called on:
       </p>

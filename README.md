@@ -59,7 +59,8 @@ let digest = Ascon.Hash256.digest_string "message"
 (* [digest] is exactly 32 bytes. *)
 ```
 
-Incremental hash contexts are immutable:
+Incremental hash contexts are persistent: each call returns a new context and
+leaves its argument unchanged.
 
 ```ocaml
 let context = Ascon.Hash256.init () in
@@ -235,6 +236,9 @@ and allocation.
   an exception.
 - This release supports full 128-bit AEAD tags only.
 - The API does not claim arbitrary bitstring support.
+- Hash and XOF contexts are persistent but hold mutable internal buffers. Under
+  OCaml 5, hand a context to another domain through synchronization, not a data
+  race.
 
 See [`SECURITY.md`](SECURITY.md) for reporting and support policy and
 [`SECURITY_REVIEW.md`](SECURITY_REVIEW.md) for the implementation checklist.
