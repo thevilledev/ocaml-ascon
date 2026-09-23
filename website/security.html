@@ -183,8 +183,9 @@
         <dt><strong>Lengths</strong></dt>
         <dd>
           One-shot XOF and CXOF lengths are validated before allocation.
-          Combined AEAD allocation checks for addition overflow. Key, nonce and
-          tag lengths are exact.
+          Combined AEAD allocation checks for addition overflow and raises
+          <code>Invalid_argument</code> rather than wrapping; only 32-bit
+          runtimes can reach that limit. Key, nonce and tag lengths are exact.
         </dd>
       </dl>
 

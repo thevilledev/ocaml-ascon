@@ -232,7 +232,9 @@ and allocation.
 - Keys and nonces are copied into abstract validated 16-byte values; incorrect
   lengths are never truncated.
 - Ordinary authentication failure is returned as a typed error, not raised as
-  an exception.
+  an exception. `encrypt_combined` raises `Invalid_argument` only if the
+  combined output would exceed `Sys.max_string_length`, which is reachable only
+  on 32-bit runtimes.
 - This release supports full 128-bit AEAD tags only.
 - The API does not claim arbitrary bitstring support.
 

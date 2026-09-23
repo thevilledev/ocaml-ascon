@@ -61,7 +61,9 @@ module Aead128 : sig
     associated_data:bytes ->
     plaintext:bytes ->
     bytes
-  (** [encrypt_combined] returns [ciphertext || tag]. *)
+  (** [encrypt_combined] returns [ciphertext || tag]. It raises
+      [Invalid_argument] if [Bytes.length plaintext + tag_size] exceeds
+      [Sys.max_string_length], which can only happen on 32-bit runtimes. *)
 
   val decrypt_combined :
     key:Key.t ->
