@@ -72,6 +72,17 @@ item should be rechecked by a human reviewer before v0.1.0.
   allocation checks for addition overflow. OCaml `bytes` bounds limit all input
   lengths to valid native integers.
 
+## Machine-checked results
+
+[`formal/`](formal/) proves in Lean 4 that a statement-by-statement model of
+the OCaml code equals an independent transcription of SP 800-232 for every
+input. This covers the table-based S-box against the bitsliced formula, the
+AEAD last-block state replacement for every tail length 0–15, padding,
+chunked absorption, and multi-call squeezing. The TLA+ models check context
+persistence, cross-domain race freedom, and the tag-before-release rule. That
+work does not replace the human review below. Its trusted base and limits are
+listed in [`formal/README.md`](formal/README.md#trusted-base-and-limits).
+
 ## Areas requiring independent human attention
 
 1. Compare the bitsliced S-box and rotations directly with Sec. 3 of final
