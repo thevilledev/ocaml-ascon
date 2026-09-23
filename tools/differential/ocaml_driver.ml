@@ -38,6 +38,15 @@ let () =
           ~plaintext:(bytes_of_hex plaintext_hex)
       in
       print_hex output
+  | [ _; "aead-open"; key_hex; nonce_hex; ad_hex; combined_hex ] -> (
+      match
+        Ascon.Aead128.decrypt_combined ~key:(key key_hex)
+          ~nonce:(nonce nonce_hex) ~associated_data:(bytes_of_hex ad_hex)
+          (bytes_of_hex combined_hex)
+      with
+      | Ok plaintext -> print_hex plaintext
+      | Error `Authentication_failure -> print_endline "authentication-failure"
+      | Error `Invalid_tag_length -> print_endline "invalid-tag-length")
   | [ _; "hash"; message_hex ] ->
       print_hex (Ascon.Hash256.digest (bytes_of_hex message_hex))
   | [ _; "xof"; message_hex; length ] ->

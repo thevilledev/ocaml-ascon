@@ -98,6 +98,18 @@ def compare(reference, ocaml, arguments, reference_arguments=None):
     actual = output([str(ocaml), *arguments])
     if expected != actual:
         raise RuntimeError(f"mismatch for: {' '.join(arguments)}")
+    return expected
+
+
+def check_open(ocaml, key, nonce, ad, combined, message):
+    """The OCaml library must open reference output and reject a modified copy."""
+    opened = output([str(ocaml), "aead-open", key, nonce, ad, combined])
+    if opened != message:
+        raise RuntimeError(f"decryption mismatch for: {key} {nonce} {ad} {combined}")
+    tampered = f"{int(combined[:2], 16) ^ 1:02x}{combined[2:]}"
+    rejected = output([str(ocaml), "aead-open", key, nonce, ad, tampered])
+    if rejected != "authentication-failure":
+        raise RuntimeError(f"modified ciphertext accepted: {tampered}")
 
 
 def main():
@@ -113,13 +125,19 @@ def main():
     with tempfile.TemporaryDirectory(prefix="ascon-differential-") as temporary:
         reference = compile_reference(ascon_c, pathlib.Path(temporary))
         for case in range(arguments.cases):
-            message_length = rng.choice(boundaries) if case < len(boundaries) else rng.randrange(258)
-            ad_length = rng.choice(boundaries) if case < len(boundaries) else rng.randrange(258)
+            # The first cases enumerate every boundary length for both inputs.
+            if case < len(boundaries):
+                message_length = boundaries[case]
+                ad_length = boundaries[-1 - case]
+            else:
+                message_length = rng.randrange(258)
+                ad_length = rng.randrange(258)
             key = random_hex(rng, 16)
             nonce = random_hex(rng, 16)
             ad = random_hex(rng, ad_length)
             message = random_hex(rng, message_length)
-            compare(reference, ocaml, ["aead", key, nonce, ad, message])
+            combined = compare(reference, ocaml, ["aead", key, nonce, ad, message])
+            check_open(ocaml, key, nonce, ad, combined, message)
             compare(reference, ocaml, ["hash", message])
             xof_length = rng.randrange(1, 65)
             expected_xof = output([str(reference), "xof", message])[: 2 * xof_length]
