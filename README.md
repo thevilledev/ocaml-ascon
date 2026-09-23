@@ -197,6 +197,18 @@ python3 tools/differential/run.py /path/to/ascon-c --cases 100
 
 The C code is built in a temporary directory and is never a package dependency.
 
+## Formal verification
+
+[`formal/`](formal/) contains a machine-checked verification of `lib/`. Lean 4
+proofs show that a statement-by-statement model of every OCaml function
+computes exactly the SP 800-232 algorithms for all inputs and all incremental
+chunkings. The proofs also show that no internal guard, out-of-bounds unsafe
+access, uninitialized read or unspecified shift is ever reached from the
+public API. TLA+ models, checked with TLC, cover context persistence, data-race
+freedom across OCaml 5 domains, and the AEAD rule that plaintext is released
+only after the tag is verified. See [`formal/README.md`](formal/README.md) for
+the results, the trusted base, and how to re-run everything.
+
 ## Benchmarks
 
 Run the complete matrix with:

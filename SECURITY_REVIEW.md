@@ -63,14 +63,26 @@ item should be rechecked by a human reviewer before v0.1.0.
   distinct. Once converted, a value cannot be passed to `absorb`.
 - **Chunking:** persistent contexts keep up to seven pending bytes. Filling a
   block from multiple feeds is equivalent to a one-shot full block.
-- **Partial squeeze blocks:** a squeezing state records an offset from 0 to 7;
-  repeated calls continue at the next byte and permute after each complete
-  output block.
+- **Partial squeeze blocks:** a squeezing state records an offset from 0 to 8,
+  where 8 means the current block is used up; repeated calls continue at the
+  next byte and permute only when a further output byte is requested, so no
+  permutation is spent after the last byte returned.
 - **Length handling:** one-shot XOF/CXOF lengths must be positive; negative and
   unrepresentable requested byte lengths return typed errors before allocation.
   A zero-length incremental squeeze is a documented no-op. Combined AEAD
   allocation checks for addition overflow. OCaml `bytes` bounds limit all input
   lengths to valid native integers.
+
+## Machine-checked results
+
+[`formal/`](formal/) proves in Lean 4 that a statement-by-statement model of
+the OCaml code equals an independent transcription of SP 800-232 for every
+input. This covers the table-based S-box against the bitsliced formula, the
+AEAD last-block state replacement for every tail length 0–15, padding,
+chunked absorption, and multi-call squeezing. The TLA+ models check context
+persistence, cross-domain race freedom, and the tag-before-release rule. That
+work does not replace the human review below. Its trusted base and limits are
+listed in [`formal/README.md`](formal/README.md#trusted-base-and-limits).
 
 ## Areas requiring independent human attention
 
